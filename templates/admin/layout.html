@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GuardianSync | Admin Command</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    .admin-sidebar { background: linear-gradient(180deg, #0f172a 0%, #1e1b4b 100%); }
+    .admin-nav-active { background: rgba(99,102,241,0.2); border-left: 3px solid #818cf8; color: white; }
+    .admin-tag { background: linear-gradient(135deg, #7c3aed, #4f46e5); }
+  </style>
+</head>
+<body class="bg-slate-100 flex min-h-screen">
+
+  <!-- Admin Sidebar — visually distinct from user sidebar -->
+  <div class="w-64 admin-sidebar min-h-screen sticky top-0 text-white p-6 flex flex-col shadow-2xl">
+    <div class="mb-8">
+      <div class="flex items-center gap-3 mb-2">
+        <div class="w-10 h-10 admin-tag rounded-xl flex items-center justify-center">
+          <i class="fa-solid fa-shield-halved text-white text-lg"></i>
+          <img src="/static/admings_icon.png" alt="admin Icon" class="ai-style-change-2">
+        </div>
+        <div>
+          <p class="text-white font-bold text-sm">GuardianSync</p>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-900 text-indigo-300 font-bold uppercase tracking-widest">Admin Console</span>
+        </div>
+      </div>
+      <div class="mt-3 h-px bg-gradient-to-r from-indigo-500 to-transparent opacity-40"></div>
+    </div>
+
+    <nav class="space-y-1 flex-1">
+      <p class="text-indigo-400 text-xs font-bold mb-3 uppercase tracking-widest flex items-center gap-2">
+        <i class="fa-solid fa-bolt text-yellow-400"></i> Operations
+      </p>
+      <a href="/admin/feed" class="nav-link flex items-center p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all" data-path="/admin/feed">
+        <i class="fa-solid fa-satellite-dish mr-3 w-5 text-red-400"></i> Live Feed
+        <span class="ml-auto w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+      </a>
+      <a href="/admin/fleet" class="nav-link flex items-center p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all" data-path="/admin/fleet">
+        <i class="fa-solid fa-truck-pickup mr-3 w-5 text-green-400"></i> Resource Fleet
+      </a>
+
+      <div class="pt-4">
+        <p class="text-indigo-400 text-xs font-bold mb-3 uppercase tracking-widest flex items-center gap-2">
+          <i class="fa-solid fa-chart-line text-blue-400"></i> Intelligence
+        </p>
+        <a href="/admin/analytics" class="nav-link flex items-center p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all" data-path="/admin/analytics">
+          <i class="fa-solid fa-chart-area mr-3 w-5 text-blue-400"></i> City Analytics
+        </a>
+        <a href="/admin/past-emergencies" class="nav-link flex items-center p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all" data-path="/admin/past-emergencies">
+          <i class="fa-solid fa-clock-rotate-left mr-3 w-5 text-amber-400"></i> Past Emergencies
+        </a>
+        <a href="/admin/reports" class="nav-link flex items-center p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all" data-path="/admin/reports">
+          <i class="fa-solid fa-file-chart-column mr-3 w-5 text-purple-400"></i> Reports
+        </a>
+        <a href="/admin/messages" class="nav-link flex items-center p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all" data-path="/admin/messages">
+          <i class="fa-solid fa-envelope mr-3 w-5 text-yellow-400"></i> Citizen Messages
+          <span id="msg-count" class="ml-auto hidden text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold"></span>
+        </a>
+        <a href="/admin/logs" class="nav-link flex items-center p-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all" data-path="/admin/logs">
+          <i class="fa-solid fa-terminal mr-3 w-5 text-cyan-400"></i> System Logs
+        </a>
+
+      </div>
+    </nav>
+
+    <div class="pt-4 border-t border-slate-700/50">
+      <div class="flex items-center gap-3 p-3 bg-indigo-900/30 rounded-xl mb-2">
+        <div class="w-9 h-9 admin-tag rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">A</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-white text-sm font-bold truncate">Admin</p>
+          <p class="text-indigo-400 text-xs">Dispatcher Console</p>
+        </div>
+      </div>
+      <a href="/auth/logout/admin" class="flex items-center p-2 rounded-lg hover:bg-red-900/30 text-slate-400 hover:text-red-400 transition text-sm">
+        <i class="fa-solid fa-right-from-bracket mr-3 w-5"></i> Sign Out
+      </a>
+    </div>
+  </div>
+
+  <div class="flex-1 flex flex-col min-h-screen overflow-hidden">
+    <!-- Admin top bar -->
+    <header class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+      <div class="flex items-center gap-3">
+        <span class="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 font-bold uppercase tracking-widest">Admin Dashboard</span>
+        <div class="flex items-center gap-2 text-green-500 text-sm font-bold">
+          <span class="w-2 h-2 bg-green-500 rounded-full animate-ping"></span> Live
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <span class="text-xs text-slate-400" id="admin-clock"></span>
+
+      </div>
+    </header>
+
+    <div class="flex-1 p-8 overflow-y-auto">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+
+<script>
+  const path = window.location.pathname;
+  document.querySelectorAll('.nav-link').forEach(a => {
+    if (a.getAttribute('data-path') === path) {
+      a.classList.add('admin-nav-active');
+      a.classList.remove('text-slate-300');
+    }
+  });
+
+  // Live clock
+  function updateClock() {
+    document.getElementById('admin-clock').textContent = new Date().toLocaleString('en-IN', {
+      weekday:'short', hour:'2-digit', minute:'2-digit', second:'2-digit'
+    });
+  }
+  setInterval(updateClock, 1000); updateClock();
+
+  // Unread message badge
+  async function checkUnreadMessages() {
+    try {
+      const res = await fetch('/api/admin/messages');
+      const msgs = await res.json();
+      const unread = msgs.filter(m => m.status === 'unread').length;
+      const badge = document.getElementById('msg-count');
+      if (unread > 0) { badge.textContent = unread; badge.classList.remove('hidden'); }
+      else badge.classList.add('hidden');
+    } catch(e) {}
+  }
+  setInterval(checkUnreadMessages, 15000);
+  checkUnreadMessages();
+</script>
+</body>
+</html>

@@ -1,0 +1,752 @@
+{% extends "user/layout.html" %}
+{% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<div class="max-w-6xl mx-auto">
+  <!-- Header -->
+  <div class="mb-5 flex items-start justify-between flex-wrap gap-3">
+    <div>
+      <a href="/" class="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 mb-1">
+        <i class="fa-solid fa-arrow-left"></i> Dashboard
+      </a>
+      <h1 class="text-2xl font-bold text-slate-800">Emergency SOS</h1>
+      <p class="text-slate-500 text-sm">Connected to GuardianSync Aid. Speak or type for help.</p>
+    </div>
+    <div class="flex items-center gap-3 flex-wrap">
+      <div id="location-badge" class="px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center gap-1">
+        <i class="fa-solid fa-location-dot"></i><span id="location-text">Locating...</span>
+      </div>
+      <div id="call-status" class="px-4 py-1.5 rounded-full bg-gray-200 text-sm font-bold">Standby</div>
+    </div>
+  </div>
+
+  <!-- Nearby active incident alert -->
+  <div id="nearby-incident-alert" class="hidden mb-5 bg-purple-50 border border-purple-300 rounded-2xl p-4">
+    <div class="flex items-start gap-3">
+      <i class="fa-solid fa-triangle-exclamation text-purple-600 text-xl mt-0.5"></i>
+      <div class="flex-1">
+        <p class="font-bold text-purple-800 text-sm">Similar Incident Already Reported Nearby</p>
+        <p class="text-xs text-purple-600 mt-1" id="nearby-incident-msg"></p>
+        <div class="flex gap-2 mt-3 flex-wrap">
+          <button onclick="reportStillUnresolved()" class="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-purple-700 transition">
+            <i class="fa-solid fa-exclamation mr-1"></i>Still not resolved — report again
+          </button>
+          <button onclick="dismissNearbyAlert()" class="bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-purple-200 transition">
+            Different incident — continue
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SOS Type Selector -->
+  <div id="sos-type-bar" class="flex gap-3 mb-5 flex-wrap">
+    <button onclick="selectSosType('self')" id="btn-self"
+      class="sos-type-btn flex-1 min-w-[140px] flex items-center gap-3 p-4 rounded-2xl border-2 border-red-500 bg-red-50 text-red-700 font-bold transition">
+      <i class="fa-solid fa-user text-xl"></i>
+      <div class="text-left"><p class="font-bold">SOS for Self</p><p class="text-xs font-normal opacity-70">I need help right now</p></div>
+    </button>
+    <button onclick="selectSosType('relative')" id="btn-relative"
+      class="sos-type-btn flex-1 min-w-[140px] flex items-center gap-3 p-4 rounded-2xl border-2 border-slate-200 bg-white text-slate-700 font-bold transition hover:border-blue-400">
+      <i class="fa-solid fa-people-group text-xl"></i>
+      <div class="text-left"><p class="font-bold">SOS for Someone I Know</p><p class="text-xs font-normal opacity-70">Calling on behalf of a relative</p></div>
+    </button>
+    <button onclick="selectSosType('stranger')" id="btn-stranger"
+      class="sos-type-btn flex-1 min-w-[140px] flex items-center gap-3 p-4 rounded-2xl border-2 border-slate-200 bg-white text-slate-700 font-bold transition hover:border-orange-400">
+      <i class="fa-solid fa-person-circle-question text-xl"></i>
+      <div class="text-left"><p class="font-bold">SOS for a Stranger</p><p class="text-xs font-normal opacity-70">Someone I don't know needs help</p></div>
+    </button>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+    <!-- Main chat + voice -->
+    <div class="lg:col-span-2 space-y-5">
+      <div class="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
+        <div class="bg-slate-800 text-white px-4 py-3 flex justify-between items-center flex-wrap gap-2">
+          <span class="flex items-center gap-2 text-sm">
+            <i class="fa-solid fa-circle-info text-blue-400"></i>
+            <span id="sos-type-label">SOS for Self</span>
+          </span>
+          <div class="flex items-center gap-3 text-xs opacity-70">
+            <span>{{ user_name }}</span>
+            <span class="font-mono">{{ incident_id }}</span>
+          </div>
+        </div>
+
+        <!-- Voice panel -->
+        <div id="voice-panel" class="hidden border-b border-slate-700 bg-slate-950 px-5 py-4 text-white">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <p class="text-xs text-cyan-300 font-bold uppercase tracking-widest">Voice Session</p>
+              <p id="voice-status-text" class="text-sm text-slate-300 mt-1">Microphone idle.</p>
+            </div>
+            <span id="voice-mode-label" class="text-sm font-bold text-cyan-100">Standby</span>
+          </div>
+          <canvas id="voice-waveform" class="h-16 w-full rounded-xl bg-slate-900"></canvas>
+        </div>
+
+        <div id="messages" class="h-[380px] overflow-y-auto p-5 flex flex-col space-y-3 bg-gray-50"></div>
+
+        <!-- Admin reply notification area -->
+        <div id="admin-reply-banner" class="hidden px-4 py-3 bg-blue-50 border-t border-blue-200 flex items-center gap-3">
+          <i class="fa-solid fa-headset text-blue-600"></i>
+          <div class="flex-1">
+            <p class="text-xs font-bold text-blue-700">Dispatcher Reply</p>
+            <p class="text-sm text-blue-800" id="admin-reply-text"></p>
+          </div>
+        </div>
+
+        <div class="p-3 bg-white border-t border-gray-100 flex gap-2">
+          <input type="text" id="userMessage"
+            class="flex-1 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none text-sm"
+            placeholder="Type your message..." onkeypress="if(event.key==='Enter') sendMessage()">
+          <button onclick="sendMessage()" class="bg-slate-700 hover:bg-slate-800 text-white px-4 py-3 rounded-xl font-bold transition text-sm">Send</button>
+          <button id="voiceBtn" onclick="toggleVoice()"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition text-sm">
+            <i class="fa-solid fa-microphone"></i><span>Voice</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Dispatch tracking panel -->
+      <div id="dispatch-panel" class="hidden bg-white rounded-2xl shadow-xl border border-green-200 overflow-hidden">
+        <div class="bg-green-600 text-white px-5 py-3 flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-2 font-bold">
+            <i class="fa-solid fa-truck-fast animate-pulse"></i> Help is on the way!
+          </div>
+          <div id="dispatch-eta" class="text-sm bg-green-700 px-3 py-1 rounded-full"></div>
+        </div>
+        <div id="dispatch-unit-info" class="px-5 py-3 bg-green-50 grid grid-cols-3 gap-4 text-sm border-b border-green-100"></div>
+        <div id="dispatch-map" style="height:220px;"></div>
+        <div class="px-5 py-3 flex gap-3 flex-wrap">
+          <a id="call-unit-btn" href="#" class="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-green-700 transition">
+            <i class="fa-solid fa-phone"></i> Call Unit
+          </a>
+          <a id="call-contacts-btn" href="#" class="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
+            <i class="fa-solid fa-users"></i> Call Emergency Contact
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right sidebar -->
+    <div class="space-y-4">
+      <!-- Medical ID quick view -->
+      {% if user_profile %}
+      <div class="bg-slate-900 rounded-2xl p-4 text-white">
+        <p class="text-xs text-slate-400 uppercase tracking-widest mb-3">Your Medical ID on File</p>
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center font-bold text-lg">
+            {{ user_name[0] | upper }}
+          </div>
+          <div>
+            <p class="font-bold">{{ user_profile.full_name or user_name }}</p>
+            <p class="text-xs text-cyan-400 font-mono">{{ user_profile.medical_id }}</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="bg-slate-800 rounded-lg p-2">
+            <p class="text-slate-400">Blood</p>
+            <p class="font-bold text-red-400">{{ user_profile.blood_type or 'N/A' }}</p>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-2">
+            <p class="text-slate-400">Allergies</p>
+            <p class="font-bold truncate">{{ user_profile.allergies or 'None' }}</p>
+          </div>
+        </div>
+        {% if emergency_contacts %}
+        <div class="mt-3 space-y-2">
+          <p class="text-xs text-slate-400 uppercase tracking-widest">Emergency Contacts</p>
+          {% for c in emergency_contacts %}
+          <a href="tel:{{ c.phone }}"
+            class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 rounded-lg p-2 transition">
+            <div class="w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center text-xs font-bold">{{ c.name[0] | upper }}</div>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-bold truncate">{{ c.name }}</p>
+              <p class="text-xs text-slate-400">{{ c.phone }}</p>
+            </div>
+            <i class="fa-solid fa-phone text-green-400 text-xs"></i>
+          </a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- Medical ID lookup -->
+      <div id="medical-lookup-box" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-4">
+        <p class="text-xs font-bold text-blue-700 uppercase tracking-widest mb-2">
+          <i class="fa-solid fa-magnifying-glass mr-1"></i> Look Up Medical ID
+        </p>
+        <div class="flex gap-2">
+          <input id="lookup-input" type="text" placeholder="e.g. GS-FA01"
+            class="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 font-mono uppercase">
+          <button onclick="lookupMedicalId()" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition">
+            <i class="fa-solid fa-search"></i>
+          </button>
+        </div>
+        <div id="lookup-result" class="mt-3 hidden"></div>
+      </div>
+
+      <!-- Similar past incidents — now with full details -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
+          <i class="fa-solid fa-clock-rotate-left mr-1 text-green-500"></i> Similar Past Incidents Nearby
+        </p>
+        <p class="text-xs text-slate-400 mb-3 italic">These incidents were resolved nearby. You are not alone — help arrives!</p>
+        <div id="similar-incidents" class="space-y-3 text-xs">
+          <p class="text-slate-400 italic">Loading...</p>
+        </div>
+      </div>
+
+      <!-- Contact Dispatcher -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
+          <i class="fa-solid fa-headset mr-1"></i> Contact Dispatcher
+        </p>
+        <textarea id="admin-msg" rows="2" placeholder="Send a direct message to the dispatcher..."
+          class="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 mb-2 resize-none"></textarea>
+        <button onclick="sendAdminMessage()"
+          class="w-full bg-slate-800 text-white py-2 rounded-lg text-sm font-bold hover:bg-blue-600 transition">
+          Send to Dispatcher
+        </button>
+        <p id="admin-msg-status" class="text-xs text-center mt-2 text-green-600 hidden">Message sent to dispatcher.</p>
+        <!-- Admin replies thread -->
+        <div id="dispatcher-replies" class="mt-3 space-y-2 hidden">
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Dispatcher Replies</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  .bubble { line-height: 1.5; font-size: 0.9rem; max-width: 80%; }
+  .user-bubble { background: #334155; color: white; align-self: flex-end; border-radius: 16px 16px 2px 16px; }
+  .ai-bubble { background: white; color: #1e293b; align-self: flex-start; border-radius: 16px 16px 16px 2px; border: 1px solid #e2e8f0; }
+  .sos-type-btn.active-self { border-color: #ef4444; background: #fef2f2; color: #b91c1c; }
+  .sos-type-btn.active-relative { border-color: #3b82f6; background: #eff6ff; color: #1d4ed8; }
+  .sos-type-btn.active-stranger { border-color: #f97316; background: #fff7ed; color: #c2410c; }
+  .similar-card { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #86efac; border-radius: 12px; padding: 10px; }
+</style>
+
+<script>
+  const userId = "{{ user_id }}";
+  const incidentId = "{{ incident_id }}";
+  const userName = "{{ user_name }}";
+  const userPhone = "{{ user_phone or '' }}";
+  let sosType = 'self';
+
+  // Use sessionStorage key so chat persists across tab switches
+  const SESSION_KEY = 'gs_chat_' + incidentId;
+  const GLOBAL_SESSION_KEY = 'gs_active_session';
+
+  let chatHistory = [];
+  let isCalling = false, mediaStream = null, audioCtx = null, analyser = null;
+  let waveformFrame = null, recognition = null, recognitionActive = false;
+  let manuallyStopped = false, voiceLoopEnabled = false, pendingVoiceSend = false;
+  let deviceLat = null, deviceLng = null, locationConfirmed = false, locationAsked = 0;
+  let specifiedLocation = null; // User-specified text location (landmark)
+  let dispatchAnnounced = false;
+  let dispatchMap = null, dispatchMarkerUnit = null, dispatchMarkerUser = null;
+  let nearbyIncident = null;
+  let lastAdminReplyCount = 0;
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // ── SOS Type ──
+  function selectSosType(type) {
+    sosType = type;
+    ['self','relative','stranger'].forEach(t => {
+      const btn = document.getElementById('btn-' + t);
+      btn.className = 'sos-type-btn flex-1 min-w-[140px] flex items-center gap-3 p-4 rounded-2xl border-2 font-bold transition ' +
+        (t === type ? 'active-' + t : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300');
+    });
+    const labels = { self: 'SOS for Self', relative: 'SOS for Someone I Know', stranger: 'SOS for a Stranger' };
+    document.getElementById('sos-type-label').textContent = labels[type];
+    document.getElementById('medical-lookup-box').classList.toggle('hidden', type === 'self');
+  }
+  selectSosType('self');
+
+  // ── Session persistence (survives tab switching) ──
+  function saveSession() {
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+        chatHistory, deviceLat, deviceLng, locationConfirmed, sosType, specifiedLocation
+      }));
+      sessionStorage.setItem(GLOBAL_SESSION_KEY, incidentId);
+      // Also persist in localStorage so the dashboard can link back with same incident_id
+      localStorage.setItem('gs_last_incident_id', incidentId);
+    } catch(e) {}
+  }
+
+  function restoreSession() {
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      if (!saved) return false;
+      const s = JSON.parse(saved);
+      if (!s.chatHistory || s.chatHistory.length < 1) return false;
+      chatHistory = s.chatHistory;
+      deviceLat = s.deviceLat; deviceLng = s.deviceLng;
+      locationConfirmed = s.locationConfirmed;
+      specifiedLocation = s.specifiedLocation;
+      if (s.sosType) selectSosType(s.sosType);
+      const container = document.getElementById('messages');
+      container.innerHTML = '';
+      chatHistory.forEach(m => {
+        if (m.role !== 'system') appendMessage(m.role === 'user' ? 'user' : 'assistant', m.content);
+      });
+      if (deviceLat) updateLocationBadge(true, deviceLat.toFixed(4) + ', ' + deviceLng.toFixed(4));
+      else if (specifiedLocation) updateLocationBadge(true, specifiedLocation);
+      return true;
+    } catch(e) { return false; }
+  }
+
+  // ── Location ──
+  function updateLocationBadge(ok, text) {
+    const b = document.getElementById('location-badge');
+    b.className = 'px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 ' +
+      (ok ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700');
+    document.getElementById('location-text').textContent = text;
+  }
+
+  function captureLocation(silent = false) {
+    if (!navigator.geolocation) { updateLocationBadge(false, 'GPS unavailable'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      deviceLat = pos.coords.latitude;
+      deviceLng = pos.coords.longitude;
+      locationConfirmed = true;
+      updateLocationBadge(true, deviceLat.toFixed(4) + ', ' + deviceLng.toFixed(4));
+      sendLocationUpdate();
+      if (!silent) appendMessage('assistant', 'Location captured. Routing nearby resources.');
+      loadSimilarIncidents();
+      checkNearbyDuplicates();
+    }, err => {
+      updateLocationBadge(false, 'Location unavailable');
+    }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
+  }
+
+  async function sendLocationUpdate() {
+    if (!deviceLat || !deviceLng) return;
+    try {
+      await fetch('/api/incident/update-location', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ incident_id: incidentId, lat: deviceLat, lng: deviceLng })
+      });
+    } catch(e) {}
+  }
+
+  // ── Check nearby duplicates ──
+  async function checkNearbyDuplicates() {
+    if (!deviceLat || !deviceLng) return;
+    try {
+      const res = await fetch(`/api/incidents/check-duplicate?lat=${deviceLat}&lng=${deviceLng}`);
+      const data = await res.json();
+      if (data.length > 0) {
+        nearbyIncident = data[0];
+        const alert = document.getElementById('nearby-incident-alert');
+        document.getElementById('nearby-incident-msg').textContent =
+          `A ${nearbyIncident.category} emergency was reported ${nearbyIncident.distance_km < 0.1 ? 'at the same location' : nearbyIncident.distance_km * 1000 + 'm away'} by ${nearbyIncident.user_name || 'someone'}. Is this the same incident?`;
+        alert.classList.remove('hidden');
+      }
+    } catch(e) {}
+  }
+
+  function reportStillUnresolved() {
+    if (!nearbyIncident) return;
+    fetch('/api/incidents/report-duplicate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        original_incident_id: nearbyIncident.id,
+        reporter_user_id: userId,
+        reporter_name: userName,
+        message: 'Issue is still not resolved — reported again by ' + userName,
+        still_unresolved: true
+      })
+    });
+    document.getElementById('nearby-incident-alert').classList.add('hidden');
+    appendMessage('assistant', 'Your additional report has been sent to the dispatcher. The team is aware this issue is still ongoing and will prioritize it.');
+    chatHistory.push({ role: 'assistant', content: 'Additional report sent.' });
+    saveSession();
+  }
+
+  function dismissNearbyAlert() {
+    document.getElementById('nearby-incident-alert').classList.add('hidden');
+    nearbyIncident = null;
+  }
+
+  // ── Similar past incidents (with full detail) ──
+  async function loadSimilarIncidents() {
+    try {
+      const params = `incident_id=${incidentId}${deviceLat ? '&lat=' + deviceLat + '&lng=' + deviceLng : ''}`;
+      const res = await fetch('/api/incidents/similar?' + params);
+      const data = await res.json();
+      const container = document.getElementById('similar-incidents');
+      if (!data.length) {
+        container.innerHTML = '<p class="text-slate-400 italic">No similar resolved incidents found nearby.</p>';
+        return;
+      }
+      container.innerHTML = data.map(inc => {
+        const dist = inc.distance_km < 1 ? Math.round(inc.distance_km * 1000) + 'm' : inc.distance_km.toFixed(1) + 'km';
+        const location = inc.location_details || 'Nearby area';
+        const resTime = inc.resolution_time_minutes ? `✅ Resolved in ${inc.resolution_time_minutes} minutes` : '✅ Resolved';
+        const safeLoc = inc.safe_location ? `🏠 Person reached: ${inc.safe_location}` : '';
+        const hospital = inc.assigned_hospital ? `🏥 Taken to: ${inc.assigned_hospital}` : '';
+        const date = new Date(inc.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        return `<div class="similar-card">
+          <div class="flex items-center justify-between mb-1">
+            <span class="font-bold text-green-800 text-xs">${inc.category} Emergency</span>
+            <span class="text-slate-500 text-xs">${dist} away · ${date}</span>
+          </div>
+          <p class="text-slate-600 text-xs mb-1"><i class="fa-solid fa-location-dot mr-1 text-green-600"></i>${location}</p>
+          <p class="text-green-700 font-bold text-xs">${resTime}</p>
+          ${hospital ? `<p class="text-emerald-600 text-xs">${hospital}</p>` : ''}
+          ${safeLoc ? `<p class="text-blue-600 text-xs">${safeLoc}</p>` : ''}
+          <p class="text-green-600 text-xs mt-1 italic">Help arrived and the situation was resolved. You are not alone.</p>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      document.getElementById('similar-incidents').innerHTML = '<p class="text-slate-400 italic">Unable to load.</p>';
+    }
+  }
+
+  // ── Medical ID lookup ──
+  async function lookupMedicalId() {
+    const mid = document.getElementById('lookup-input').value.trim().toUpperCase();
+    if (!mid) return;
+    const result = document.getElementById('lookup-result');
+    result.innerHTML = '<p class="text-blue-500 text-xs">Looking up...</p>';
+    result.classList.remove('hidden');
+    try {
+      const res = await fetch('/api/user/lookup-medical-id?id=' + encodeURIComponent(mid));
+      const data = await res.json();
+      result.innerHTML = `<div class="bg-white rounded-lg p-3 border border-blue-200 text-xs space-y-1">
+        <p class="font-bold text-blue-800">${data.full_name}</p>
+        <p>Blood: <strong class="text-red-600">${data.blood_type}</strong></p>
+        <p>Allergies: ${data.allergies || 'None'}</p>
+        <p class="text-slate-500">${data.conditions || 'No known conditions'}</p>
+      </div>`;
+      const msg = 'The affected person is ' + data.full_name + '. Medical ID: ' + mid + '. Blood type: ' + data.blood_type + '. Allergies: ' + (data.allergies || 'None') + '. Conditions: ' + (data.conditions || 'None') + '.';
+      chatHistory.push({ role: 'user', content: msg });
+    } catch(e) {
+      result.innerHTML = '<p class="text-red-600 text-xs">Medical ID not found in GuardianSync database.</p>';
+    }
+  }
+
+  // ── Chat ──
+  function appendMessage(role, text) {
+    const container = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = 'bubble p-3 shadow-sm ' + (role === 'user' ? 'user-bubble self-end' : 'ai-bubble');
+    div.innerHTML = '<strong>' + (role === 'user' ? (userName || 'You') : 'Aid Coordinator') + ':</strong><br>' + text;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById('userMessage');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+    await submitTurn(msg, { source: 'text' });
+  }
+
+  function checkLocationInText(text) {
+    const lc = text.toLowerCase();
+    // If user mentions a landmark, use that as location instead of GPS
+    const landmarks = ['road', 'junction', 'bridge', 'hospital', 'mall', 'station', 'street', 'nagar',
+      'colony', 'park', 'near', 'opposite', 'behind', 'before', 'signal', 'gate', 'temple', 'church', 'mosque'];
+    if (landmarks.some(l => lc.includes(l)) && !locationConfirmed) {
+      specifiedLocation = text.slice(0, 80);
+      locationConfirmed = true;
+      updateLocationBadge(true, 'Location from description');
+      // Don't override with GPS — keep user's specified location
+    }
+  }
+
+  function checkIfAskingLocation(text) {
+    if (locationConfirmed) return;
+    const lc = text.toLowerCase();
+    if (lc.includes('location') || lc.includes('address') || lc.includes('where are you')) {
+      locationAsked++;
+      // Only auto-capture GPS if user hasn't specified a text location
+      if (locationAsked >= 2 && !specifiedLocation) captureLocation(false);
+    }
+  }
+
+  async function submitTurn(message, { source, silent = false }) {
+    if (!silent) {
+      appendMessage('user', message);
+      checkLocationInText(message);
+    }
+    chatHistory.push({ role: 'user', content: message });
+    try {
+      const res = await fetch('/analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId, incident_id: incidentId,
+          device_lat: deviceLat, device_lng: deviceLng,
+          sos_type: sosType,
+          messages: chatHistory
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Server error');
+      const reply = data.ai_response || 'I am here with you. Please continue.';
+      if (!silent || data.ai_response) {
+        appendMessage('assistant', reply);
+        chatHistory.push({ role: 'assistant', content: reply });
+      }
+      checkIfAskingLocation(reply);
+      saveSession();
+      if (source === 'voice' && isCalling) speakAiResponse(reply);
+    } catch(err) {
+      const fallback = 'Communication error. Please try again.';
+      appendMessage('assistant', fallback);
+      chatHistory.push({ role: 'assistant', content: fallback });
+      if (source === 'voice' && isCalling) speakAiResponse(fallback);
+    }
+  }
+
+  // ── Poll for dispatch + admin replies ──
+  async function pollForDispatch() {
+    try {
+      const res = await fetch('/api/incident/status/' + incidentId);
+      if (!res.ok) return;
+      const data = await res.json();
+
+      // Check for dispatch
+      if (data.status === 'RESOURCE_ALLOCATED' && data.assigned_unit && !dispatchAnnounced) {
+        dispatchAnnounced = true;
+        showDispatchPanel(data);
+        await submitTurn('[SYSTEM: Resource has been dispatched. Announce to citizen.]', { source: isCalling ? 'voice' : 'text', silent: true });
+      }
+
+      // Check for admin replies
+      if (data.admin_replies && data.admin_replies.length > lastAdminReplyCount) {
+        const newReplies = data.admin_replies.slice(0, data.admin_replies.length - lastAdminReplyCount);
+        lastAdminReplyCount = data.admin_replies.length;
+        newReplies.forEach(r => showAdminReply(r.reply));
+      }
+    } catch(e) {}
+  }
+
+  function showAdminReply(replyText) {
+    // Show in banner
+    const banner = document.getElementById('admin-reply-banner');
+    document.getElementById('admin-reply-text').textContent = replyText;
+    banner.classList.remove('hidden');
+
+    // Show in replies thread
+    const thread = document.getElementById('dispatcher-replies');
+    thread.classList.remove('hidden');
+    const div = document.createElement('div');
+    div.className = 'bg-blue-50 border border-blue-200 rounded-lg p-2 text-xs';
+    div.innerHTML = `<p class="font-bold text-blue-700 mb-1">Dispatcher:</p><p class="text-slate-700">${replyText}</p>`;
+    thread.appendChild(div);
+  }
+
+  function showDispatchPanel(data) {
+    document.getElementById('dispatch-panel').classList.remove('hidden');
+    const unit_id = data.assigned_unit || '';
+    const contact = data.resource_contact || '108';
+    const hospital = data.assigned_hospital || '';
+    let unit_type = 'Emergency Unit', eta = '10-15 min', icon = 'fa-truck-fast', color = 'text-green-600';
+    if (unit_id.includes('AMB')) { unit_type = 'Ambulance'; eta = '8-12 min'; icon = 'fa-truck-medical'; color = 'text-emerald-600'; }
+    else if (unit_id.includes('FIRE')) { unit_type = 'Fire Truck'; eta = '6-10 min'; icon = 'fa-fire-extinguisher'; color = 'text-red-600'; }
+    else if (unit_id.includes('POLICE')) { unit_type = 'Police Unit'; eta = '5-8 min'; icon = 'fa-shield-alt'; color = 'text-blue-600'; }
+
+    document.getElementById('dispatch-eta').textContent = 'ETA: ' + eta;
+    document.getElementById('dispatch-unit-info').innerHTML = `
+      <div><p class="text-xs text-slate-400">Unit</p><p class="font-bold ${color}"><i class="fa-solid ${icon} mr-1"></i>${unit_id}</p></div>
+      <div><p class="text-xs text-slate-400">Type</p><p class="font-bold text-slate-700">${unit_type}</p></div>
+      <div><p class="text-xs text-slate-400">${hospital ? 'Hospital' : 'Contact'}</p><p class="font-bold text-emerald-700">${hospital || contact}</p></div>`;
+    document.getElementById('call-unit-btn').href = 'tel:' + contact;
+
+    if (!dispatchMap && deviceLat && deviceLng) {
+      dispatchMap = L.map('dispatch-map').setView([deviceLat, deviceLng], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(dispatchMap);
+      dispatchMarkerUser = L.circleMarker([deviceLat, deviceLng], { radius: 10, fillColor: '#ef4444', color: '#fff', fillOpacity: 0.9, weight: 2 })
+        .addTo(dispatchMap).bindPopup('Your Location');
+      let unitLat = deviceLat + 0.012, unitLng = deviceLng + 0.008;
+      dispatchMarkerUnit = L.circleMarker([unitLat, unitLng], { radius: 10, fillColor: '#22c55e', color: '#fff', fillOpacity: 0.9, weight: 2 })
+        .addTo(dispatchMap).bindPopup(unit_id + ' - En Route');
+      L.polyline([[unitLat, unitLng], [deviceLat, deviceLng]], { color: '#3b82f6', weight: 3, dashArray: '8,6' }).addTo(dispatchMap);
+      let steps = 10, step = 0;
+      const interval = setInterval(() => {
+        step++;
+        if (step >= steps) { clearInterval(interval); return; }
+        const t = step / steps;
+        dispatchMarkerUnit.setLatLng([unitLat + (deviceLat - unitLat) * t, unitLng + (deviceLng - unitLng) * t]);
+      }, 5000);
+    }
+  }
+
+  // ── Contact admin ──
+  async function sendAdminMessage() {
+    const msg = document.getElementById('admin-msg').value.trim();
+    if (!msg) return;
+    await fetch('/api/user/contact-admin', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, user_name: userName, incident_id: incidentId, message: msg })
+    });
+    document.getElementById('admin-msg').value = '';
+    document.getElementById('admin-msg-status').classList.remove('hidden');
+    setTimeout(() => document.getElementById('admin-msg-status').classList.add('hidden'), 3000);
+  }
+
+  // ── Voice ──
+  function setVoiceState(mode, detail) {
+    const status = document.getElementById('call-status');
+    document.getElementById('voice-panel').classList.remove('hidden');
+    document.getElementById('voice-status-text').textContent = detail;
+    document.getElementById('voice-mode-label').textContent = mode;
+    const cls = { Listening: 'bg-cyan-100 text-cyan-700', Processing: 'bg-amber-100 text-amber-700', Speaking: 'bg-emerald-100 text-emerald-700', Standby: 'bg-gray-200 text-slate-700' };
+    status.className = 'px-4 py-1.5 rounded-full text-sm font-bold ' + (cls[mode] || 'bg-blue-100 text-blue-700');
+    status.textContent = mode === 'Standby' ? 'Standby' : mode;
+  }
+
+  function resizeWaveform() {
+    const r = window.devicePixelRatio || 1, cv = document.getElementById('voice-waveform');
+    cv.width = (cv.clientWidth || 640) * r; cv.height = (cv.clientHeight || 64) * r;
+    cv.getContext('2d').setTransform(r, 0, 0, r, 0, 0);
+  }
+
+  function drawIdleWave() {
+    const cv = document.getElementById('voice-waveform'), ctx = cv.getContext('2d');
+    resizeWaveform();
+    const w = cv.clientWidth, h = cv.clientHeight;
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(148,163,184,0.5)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+  }
+
+  function startWaveform() {
+    if (!analyser) return;
+    const cv = document.getElementById('voice-waveform'), ctx = cv.getContext('2d');
+    const data = new Uint8Array(analyser.fftSize);
+    const render = () => {
+      const w = cv.clientWidth, h = cv.clientHeight;
+      ctx.clearRect(0, 0, w, h);
+      analyser.getByteTimeDomainData(data);
+      ctx.lineWidth = 2; ctx.strokeStyle = '#22d3ee'; ctx.shadowBlur = 10; ctx.shadowColor = 'rgba(34,211,238,0.6)';
+      ctx.beginPath();
+      data.forEach((v, i) => { const x = i * w / data.length, y = (v/128) * h/2; i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); });
+      ctx.lineTo(w, h/2); ctx.stroke(); ctx.shadowBlur = 0;
+      if (isCalling) waveformFrame = requestAnimationFrame(render);
+    };
+    if (waveformFrame) cancelAnimationFrame(waveformFrame);
+    waveformFrame = requestAnimationFrame(render);
+  }
+
+  function createRecognition() {
+    if (!SpeechRecognition) throw new Error('Not supported');
+    recognition = new SpeechRecognition();
+    recognition.continuous = false; recognition.interimResults = false; recognition.lang = 'en-IN';
+    recognition.onstart = () => { recognitionActive = true; setVoiceState('Listening', 'Speak now...'); };
+    recognition.onresult = async (e) => {
+      const transcript = e.results[0][0].transcript.trim();
+      if (!transcript || pendingVoiceSend) return;
+      pendingVoiceSend = true; recognition.stop();
+      setVoiceState('Processing', 'Captured: "' + transcript + '"');
+      await submitTurn(transcript, { source: 'voice' });
+      pendingVoiceSend = false;
+    };
+    recognition.onerror = (e) => { if (!isCalling) return; if (e.error === 'not-allowed') { stopVoice(); return; } };
+    recognition.onend = () => {
+      recognitionActive = false;
+      if (voiceLoopEnabled && isCalling && !manuallyStopped && !pendingVoiceSend && !speechSynthesis.speaking) {
+        setTimeout(() => { if (isCalling && !pendingVoiceSend) recognition.start(); }, 200);
+      }
+    };
+  }
+
+  function speakAiResponse(text) {
+    if (!('speechSynthesis' in window)) { restartLoop(); return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-IN'; u.rate = 1.05;
+    u.onstart = () => setVoiceState('Speaking', 'Coordinator responding...');
+    u.onend = () => restartLoop();
+    u.onerror = () => restartLoop();
+    speechSynthesis.speak(u);
+  }
+
+  function restartLoop() {
+    if (!isCalling || manuallyStopped) return;
+    setVoiceState('Listening', 'Your turn...');
+    if (recognition && !recognitionActive && !pendingVoiceSend) setTimeout(() => recognition.start(), 150);
+  }
+
+  async function setupAudio() {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const src = audioCtx.createMediaStreamSource(mediaStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.8;
+    src.connect(analyser); startWaveform();
+  }
+
+  async function toggleVoice() { isCalling ? stopVoice() : await startVoice(); }
+
+  async function startVoice() {
+    if (!SpeechRecognition) { alert('Use Chrome or Edge for voice.'); return; }
+    manuallyStopped = false; voiceLoopEnabled = true; pendingVoiceSend = false;
+    setVoiceState('Connecting', 'Requesting mic...');
+    try {
+      await setupAudio(); createRecognition(); isCalling = true;
+      const btn = document.getElementById('voiceBtn');
+      btn.querySelector('span').textContent = 'Stop'; btn.classList.replace('bg-blue-600','bg-slate-900');
+      recognition.start();
+    } catch(e) { setVoiceState('Standby', 'Could not start voice.'); stopVoice({ preserveState: true }); }
+  }
+
+  function stopVoice({ preserveState = false } = {}) {
+    manuallyStopped = true; voiceLoopEnabled = false; isCalling = false; pendingVoiceSend = false;
+    if (recognition) { recognition.onend = null; try { recognition.stop(); } catch(e){} recognition = null; }
+    speechSynthesis.cancel();
+    if (waveformFrame) { cancelAnimationFrame(waveformFrame); waveformFrame = null; }
+    if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+    if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+    audioCtx = null; analyser = null;
+    const btn = document.getElementById('voiceBtn');
+    btn.querySelector('span').textContent = 'Voice';
+    btn.classList.remove('bg-slate-900'); btn.classList.add('bg-blue-600');
+    if (!preserveState) { setVoiceState('Standby', 'Microphone idle.'); drawIdleWave(); }
+  }
+
+  // ── Init ──
+  window.addEventListener('resize', () => isCalling ? resizeWaveform() : drawIdleWave());
+
+  const restored = restoreSession();
+  if (!restored) {
+    const welcome = 'Hello{{ ", " + user_name if user_name else "" }}. I am your GuardianSync aid coordinator. Please tell me what emergency you are facing, and I will dispatch help immediately.';
+    appendMessage('assistant', welcome);
+    chatHistory.push({ role: 'assistant', content: welcome });
+  }
+
+  captureLocation(true);
+  setInterval(() => captureLocation(true), 60000);
+  setInterval(pollForDispatch, 6000);
+  loadSimilarIncidents();
+  drawIdleWave();
+
+  // Listen for admin closing this incident via BroadcastChannel
+  try {
+    const bc = new BroadcastChannel('gs_incident_events');
+    bc.onmessage = (e) => {
+      if (e.data && e.data.type === 'incident_closed' && e.data.incidentId === incidentId) {
+        // Clear resume state so back-nav doesn't re-open a closed chat
+        localStorage.removeItem('gs_last_incident_id');
+        sessionStorage.removeItem(SESSION_KEY);
+        sessionStorage.removeItem(GLOBAL_SESSION_KEY);
+        appendMessage('assistant', '✅ This emergency has been marked as resolved by the command centre. You may safely close this page. If you need further assistance, please start a new SOS.');
+        // Disable further input
+        document.getElementById('chat-input')?.setAttribute('disabled', 'true');
+        document.getElementById('send-btn')?.setAttribute('disabled', 'true');
+      }
+    };
+  } catch(e) {}
+</script>
+{% endblock %}

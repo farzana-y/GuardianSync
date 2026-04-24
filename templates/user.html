@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Emergency Situation Portal</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background-color: #f4f7f6; }
+        #chat-window { max-width: 600px; margin: auto; background: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); overflow: hidden; }
+        #messages { height: 400px; overflow-y: auto; padding: 20px; border-bottom: 1px solid #eee; display: flex; flex-direction: column; }
+        .bubble { margin-bottom: 15px; padding: 10px 15px; border-radius: 15px; max-width: 80%; line-height: 1.4; }
+        .user-bubble { background: #007bff; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .ai-bubble { background: #e9ecef; color: #333; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .controls { padding: 20px; display: flex; gap: 10px; background: #fff; }
+        input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px; outline: none; }
+        button { border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-send { background: #28a745; color: white; }
+        .btn-voice { background: #dc3545; color: white; }
+        #call-status { text-align: center; padding: 5px; font-size: 0.8em; color: #666; }
+    </style>
+</head>
+<body>
+
+<div id="chat-window">
+    <div style="background: #333; color: white; padding: 15px; text-align: center;">
+        <h2 style="margin:0;">Emergency AI Dispatch</h2>
+    </div>
+    
+    <div id="call-status">Ready to assist.</div>
+    <div id="messages">
+        <div class="bubble ai-bubble">Emergency Dispatch here. What is your emergency?</div>
+    </div>
+
+    <div class="controls">
+        <input type="text" id="userMessage" placeholder="Type your message..." onkeypress="if(event.key==='Enter') sendMessage()">
+        <button class="btn-send" onclick="sendMessage()">Send</button>
+        <button id="voiceBtn" class="btn-voice" onclick="toggleVoice()">🎤 Call</button>
+    </div>
+</div>
+
+<script>
+    let chatHistory = [];
+    let socket = null;
+    let isCalling = false;
+    let mediaStream = null;
+    let audioCtx = null;
+
+    // --- TEXT CHAT LOGIC ---
+    async function sendMessage() {
+        const input = document.getElementById("userMessage");
+        const message = input.value.trim();
+        if (!message) return;
+
+        appendMessage("user", message);
+        input.value = "";
+
+        // Build history for the AI
+        chatHistory.push({ role: "user", content: message });
+
+        try {
+            const response = await fetch("/analyze", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    user_id: "dev_user_123",
+                    messages: chatHistory
+                })
+            });
+
+            const data = await response.json();
+            if (data.ai_response) {
+                appendMessage("ai", data.ai_response);
+                chatHistory.push({ role: "assistant", content: data.ai_response });
+            }
+        } catch (err) {
+            console.error("Chat Error:", err);
+            appendMessage("ai", "Error connecting to server.");
+        }
+    }
+
+    function appendMessage(role, text) {
+        const container = document.getElementById("messages");
+        const div = document.createElement("div");
+        div.className = `bubble ${role === 'user' ? 'user-bubble' : 'ai-bubble'}`;
+        div.innerText = text;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // --- VOICE (WEBSOCKET) LOGIC ---
+    async function toggleVoice() {
+        const btn = document.getElementById("voiceBtn");
+        if (isCalling) {
+            stopVoice();
+            btn.innerText = "🎤 Call";
+            btn.style.background = "#dc3545";
+        } else {
+            await startVoice();
+            btn.innerText = "🛑 Stop";
+            btn.style.background = "#333";
+        }
+    }
+
+    async function startVoice() {
+        const status = document.getElementById("call-status");
+        status.innerText = "Connecting...";
+
+        // Initialize Audio Context for playback
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+
+        socket = new WebSocket(`ws://${window.location.host}/ws/emergency`);
+        socket.binaryType = "arraybuffer";
+
+        socket.onopen = async () => {
+            status.innerHTML = "<span style='color:green;'>● LIVE CALL</span>";
+            isCalling = true;
+            
+            // Capture Mic
+            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const source = audioCtx.createMediaStreamSource(mediaStream);
+            const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+            source.connect(processor);
+            processor.connect(audioCtx.destination);
+
+            processor.onaudioprocess = (e) => {
+                if (!isCalling) return;
+                const inputData = e.inputBuffer.getChannelData(0);
+                // Convert Float32 to Int16 for the server
+                const pcmData = new Int16Array(inputData.length);
+                for (let i = 0; i < inputData.length; i++) {
+                    pcmData[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
+                }
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(pcmData.buffer);
+                }
+            };
+        };
+
+        socket.onmessage = async (event) => {
+        // Check if the data is a String (JSON Transcript) or ArrayBuffer (Audio)
+        if (typeof event.data === "string") {
+            const data = JSON.parse(event.data);
+            if (data.type === "transcript") {
+                appendMessage(data.role, data.text);
+                chatHistory.push({ role: data.role, content: data.text });
+            }
+        } else {
+        // It's Audio - Play it
+            const arrayBuffer = event.data;
+            audioCtx.decodeAudioData(arrayBuffer, (buffer) => {
+                const source = audioCtx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioCtx.destination);
+                source.start(0);
+            });
+        }
+    };
+
+        socket.onclose = () => stopVoice();
+    }
+
+    function stopVoice() {
+        isCalling = false;
+        if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+        if (socket) socket.close();
+        if (audioCtx) audioCtx.close();
+        document.getElementById("call-status").innerText = "Call Ended.";
+    }
+</script>
+</body>
+</html>

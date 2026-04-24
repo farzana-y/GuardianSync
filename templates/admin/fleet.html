@@ -1,0 +1,509 @@
+{% extends "admin/layout.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-8">
+  <div class="flex justify-between items-center flex-wrap gap-4">
+    <div>
+      <h1 class="text-3xl font-bold text-slate-800">Resource Fleet</h1>
+      <p class="text-slate-500">Select an incident first, then tap a unit to dispatch.</p>
+    </div>
+    <button onclick="openAddModal()" class="bg-slate-900 text-white px-5 py-3 rounded-xl font-bold hover:bg-blue-600 transition flex items-center gap-2">
+      <i class="fa-solid fa-plus"></i> Add Resource
+    </button>
+  </div>
+
+  <!-- ── STEP 1: Active Incidents (TOP, prominent) ── -->
+  <div class="bg-white rounded-2xl shadow-xl border-2 border-amber-300 overflow-hidden">
+    <div class="bg-amber-50 border-b border-amber-200 px-6 py-4 flex items-center justify-between flex-wrap gap-2">
+      <div>
+        <h2 class="text-base font-bold text-amber-800 flex items-center gap-2">
+          <span class="w-2 h-2 bg-amber-500 rounded-full animate-ping inline-block"></span>
+          STEP 1 — Select an Active Incident
+        </h2>
+        <p class="text-xs text-amber-600 mt-0.5">Click an incident card to select it, then assign a unit below.</p>
+      </div>
+      <span id="selected-incident-badge" class="hidden px-4 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center gap-2">
+        <i class="fa-solid fa-crosshairs"></i> <span id="selected-label">None</span>
+      </span>
+    </div>
+    <div class="p-6">
+      <div id="assignment-panel" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      <p id="no-incidents-msg" class="hidden text-slate-400 italic text-sm py-2">No active incidents requiring assignment right now.</p>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: Fleet by Type ── -->
+  <div>
+    <h2 class="text-lg font-bold text-slate-700 mb-2 flex items-center gap-2">
+      <i class="fa-solid fa-truck-medical text-green-500"></i> STEP 2 — Select a Unit to Dispatch
+    </h2>
+    <p id="dispatch-hint" class="text-sm text-slate-400 mb-4">Select an incident above first.</p>
+    <div id="fleet-by-type" class="space-y-8"></div>
+  </div>
+</div>
+
+<!-- Add/Edit Resource Modal -->
+<div id="resource-modal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl">
+      <h3 class="font-bold text-lg" id="modal-title">Add Resource</h3>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <form id="resource-form" class="p-6 space-y-4">
+      <input type="hidden" id="edit-unit-id">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Unit ID</label>
+          <input id="f-unit-id" type="text" placeholder="AMB-KOCHI-03" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Unit Type</label>
+          <select id="f-unit-type" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            <option>Ambulance</option><option>Fire Truck</option><option>Police</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Driver / Officer</label>
+          <input id="f-driver" type="text" placeholder="Full name" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Number</label>
+          <input id="f-contact" type="text" placeholder="Emergency contact" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Station / Base</label>
+          <input id="f-station" type="text" placeholder="Station name" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Hospital (Ambulance)</label>
+          <input id="f-hospital" type="text" placeholder="Associated hospital" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">City</label>
+          <select id="f-city" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            <option>Kochi</option><option>Bangalore</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Status</label>
+          <select id="f-status" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            <option>Standby</option><option>En Route</option><option>Unavailable</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="saveResource()" class="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-blue-600 transition">Save Resource</button>
+        <button type="button" onclick="closeModal()" class="px-6 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  .incident-card { cursor: pointer; transition: all 0.15s; }
+  .incident-card.selected { border-color: #2563eb !important; background: #eff6ff !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.2); }
+  .unit-card { transition: all 0.15s; }
+  .unit-card.can-dispatch { cursor: pointer; }
+  .unit-card.can-dispatch:hover { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+</style>
+
+<script>
+  let allFleet = [], allIncidents = [], selectedIncidentId = null;
+
+  const typeConfig = {
+    "Ambulance": { icon: "fa-truck-medical", bgClass: "bg-emerald-50 border-emerald-200", textClass: "text-emerald-700", badgeClass: "bg-emerald-100 text-emerald-700", headerClass: "text-emerald-600", borderColor: "border-emerald-300" },
+    "Fire Truck": { icon: "fa-fire-extinguisher", bgClass: "bg-red-50 border-red-200", textClass: "text-red-700", badgeClass: "bg-red-100 text-red-700", headerClass: "text-red-600", borderColor: "border-red-300" },
+    "Police":    { icon: "fa-shield-alt", bgClass: "bg-indigo-50 border-indigo-200", textClass: "text-indigo-700", badgeClass: "bg-indigo-100 text-indigo-700", headerClass: "text-indigo-600", borderColor: "border-indigo-300" },
+  };
+
+  function statusBadge(s) {
+    if (s === 'En Route') return 'bg-orange-100 text-orange-700';
+    if (s === 'Unavailable') return 'bg-red-100 text-red-700';
+    return 'bg-green-100 text-green-700';
+  }
+
+  function groupBy(arr, key) {
+    return arr.reduce((acc, item) => {
+      const k = item[key] || 'Other';
+      if (!acc[k]) acc[k] = [];
+      acc[k].push(item);
+      return acc;
+    }, {});
+  }
+
+  // ── Render incident cards on top ──
+  function renderIncidents() {
+    const panel = document.getElementById('assignment-panel');
+    const noMsg = document.getElementById('no-incidents-msg');
+
+    // Show active (not yet dispatched/resolved) incidents
+    const pending = allIncidents.filter(i =>
+      i.status !== 'RESOURCE_ALLOCATED' &&
+      i.status !== 'closed' &&
+      i.status !== 'resolved'
+    );
+
+    // Sort critical first
+    pending.sort((a, b) => {
+      const sev = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+      return (sev[a.severity] ?? 2) - (sev[b.severity] ?? 2);
+    });
+
+    if (!pending.length) {
+      panel.innerHTML = '';
+      noMsg.classList.remove('hidden');
+      return;
+    }
+    noMsg.classList.add('hidden');
+
+    panel.innerHTML = pending.map(inc => {
+      const isSel = selectedIncidentId === inc.id;
+      const isCrit = inc.severity === 'Critical';
+      const sevColor = isCrit ? 'text-red-600 bg-red-100' : inc.severity === 'High' ? 'text-orange-600 bg-orange-100' : 'text-yellow-600 bg-yellow-100';
+      return `
+        <div class="incident-card border-2 rounded-xl p-4 ${isSel ? 'selected' : isCrit ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}"
+          id="inc-card-${inc.id}" onclick="selectIncident('${inc.id}')">
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div>
+              ${isCrit ? '<span class="text-xs font-bold text-red-600 uppercase tracking-widest animate-pulse">⚠ CRITICAL</span><br>' : ''}
+              <span class="font-bold text-slate-800">${inc.user_name || inc.user_id || 'Unknown Citizen'}</span>
+            </div>
+            <div class="flex flex-col items-end gap-1">
+              <span class="text-xs font-bold px-2 py-0.5 rounded-full ${sevColor}">${inc.severity || 'Medium'}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">${inc.category || 'General'}</span>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 mb-1"><i class="fa-solid fa-location-dot mr-1"></i>${inc.location_details || (inc.lat ? parseFloat(inc.lat).toFixed(4) + ', ' + parseFloat(inc.lng).toFixed(4) : 'Location pending')}</p>
+          <p class="text-xs text-slate-600 italic">${(inc.description || inc.transcript || 'No description').slice(0, 80)}${(inc.description || inc.transcript || '').length > 80 ? '...' : ''}</p>
+          <p class="text-xs text-slate-400 mt-1">${new Date(inc.created_at).toLocaleTimeString()}</p>
+          ${isSel ? '<div class="mt-2 text-xs text-blue-600 font-bold flex items-center gap-1"><i class="fa-solid fa-check-circle"></i> Selected — now pick a unit below</div>' : ''}
+        </div>`;
+    }).join('');
+  }
+
+  // ── Render fleet grid below ──
+  function renderFleet() {
+    const container = document.getElementById('fleet-by-type');
+    const hint = document.getElementById('dispatch-hint');
+    const types = ['Ambulance', 'Fire Truck', 'Police'];
+    const grouped = groupBy(allFleet, 'unit_type');
+
+    hint.textContent = selectedIncidentId
+      ? 'Click any green Standby unit card to dispatch it to the selected incident.'
+      : 'Select an incident above first, then tap a unit to dispatch.';
+    hint.className = selectedIncidentId
+      ? 'text-sm text-blue-600 font-bold mb-5'
+      : 'text-sm text-slate-400 mb-5';
+
+    container.innerHTML = types.map(type => {
+      const units = grouped[type] || [];
+      if (!units.length) return '';
+      const cfg = typeConfig[type] || { icon: 'fa-truck', bgClass: 'bg-slate-50 border-slate-200', textClass: 'text-slate-700', badgeClass: 'bg-slate-100 text-slate-700', headerClass: 'text-slate-600', borderColor: 'border-slate-300' };
+
+      return `
+        <div class="bg-white rounded-2xl border-2 ${cfg.borderColor} shadow-sm overflow-hidden">
+          <div class="px-6 py-4 border-b ${cfg.borderColor} flex items-center justify-between" style="background: inherit;">
+            <h3 class="font-bold text-slate-800 flex items-center gap-2">
+              <i class="fa-solid ${cfg.icon} ${cfg.headerClass} text-lg"></i>
+              <span>${type}s</span>
+              <span class="${cfg.badgeClass} text-xs font-bold px-2 py-0.5 rounded-full">${units.length} units</span>
+            </h3>
+            <span class="text-xs text-slate-400">${units.filter(u => u.current_status === 'Standby' || u.current_status === 'Available').length} available</span>
+          </div>
+          <div class="p-5">
+            <div class="grid grid-cols-3 gap-4">
+              ${units.map(unit => {
+                const isAvailable = unit.current_status === 'Standby' || unit.current_status === 'Available';
+                const canDispatch = selectedIncidentId && isAvailable;
+                return `
+                  <div class="unit-card border-2 rounded-xl p-4 ${canDispatch ? 'border-slate-200 can-dispatch hover:border-blue-400 cursor-pointer' : isAvailable ? 'border-slate-200 cursor-pointer hover:border-slate-400' : 'border-slate-100 opacity-60 cursor-pointer'} bg-white shadow-sm transition-all"
+                    id="unit-${unit.unit_id}" onclick="openUnitDetail('${unit.unit_id}')">
+                    <div class="flex justify-between items-start mb-3">
+                      <div class="p-2 ${cfg.bgClass} border rounded-lg ${cfg.textClass}">
+                        <i class="fa-solid ${cfg.icon}"></i>
+                      </div>
+                      <div class="flex flex-col items-end gap-1">
+                        <span class="text-xs font-bold px-2 py-0.5 rounded-full ${statusBadge(unit.current_status)}">${unit.current_status || 'Standby'}</span>
+                        <button onclick="event.stopPropagation(); openEditModal('${unit.unit_id}')" class="text-slate-400 hover:text-slate-700 text-xs px-1.5 py-0.5 rounded hover:bg-slate-100">
+                          <i class="fa-solid fa-pen"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <p class="font-bold text-slate-800 text-sm mb-0.5 truncate">${unit.unit_id}</p>
+                    ${unit.driver_name ? `<p class="text-xs text-slate-500 truncate"><i class="fa-solid fa-user mr-1"></i>${unit.driver_name}</p>` : ''}
+                    ${unit.station_name ? `<p class="text-xs text-slate-400 truncate"><i class="fa-solid fa-map-pin mr-1"></i>${unit.station_name}</p>` : ''}
+                    <p class="text-xs text-slate-400"><i class="fa-solid fa-phone mr-1"></i>${unit.contact || 'N/A'}</p>
+                    ${unit.assigned_incident_id ? `<p class="text-xs text-orange-600 font-bold mt-1 truncate">On: ${unit.assigned_incident_id.slice(0,8).toUpperCase()}</p>` : ''}
+                    ${canDispatch ? '<div class="mt-2 text-center text-xs text-blue-600 font-bold border border-blue-200 bg-blue-50 rounded-lg py-1">Tap to Dispatch</div>' : ''}
+                  </div>`;
+              }).join('')}
+            </div>
+          </div>
+        </div>`;
+    }).join('');};
+
+  function selectIncident(id) {
+    selectedIncidentId = id;
+    renderIncidents();
+    renderFleet();
+
+    // Update badge
+    const inc = allIncidents.find(i => i.id === id);
+    const badge = document.getElementById('selected-incident-badge');
+    document.getElementById('selected-label').textContent = inc ? (inc.user_name || inc.user_id) + ' — ' + (inc.category || 'General') : id;
+    badge.classList.remove('hidden');
+    badge.classList.add('flex');
+
+    // Scroll to fleet
+    document.getElementById('fleet-by-type').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function selectUnit(unitId) {
+    if (!selectedIncidentId) {
+      alert('Please select an active incident first (Step 1 above).');
+      return;
+    }
+    const unit = allFleet.find(u => u.unit_id === unitId);
+    if (!unit) return;
+    if (unit.current_status === 'En Route' || unit.current_status === 'Unavailable') {
+      alert('Unit ' + unitId + ' is currently ' + unit.current_status + '. Choose a Standby unit.');
+      return;
+    }
+    const inc = allIncidents.find(i => i.id === selectedIncidentId);
+    const incLabel = inc ? (inc.user_name || inc.user_id) : selectedIncidentId;
+    if (!confirm('Dispatch ' + unitId + ' to incident for ' + incLabel + '?')) return;
+
+    const res = await fetch('/api/admin/allocate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unit_id: unitId, incident_id: selectedIncidentId })
+    });
+
+    if (res.ok) {
+      // Clear selection
+      selectedIncidentId = null;
+      document.getElementById('selected-incident-badge').classList.add('hidden');
+      document.getElementById('selected-incident-badge').classList.remove('flex');
+      // Immediately reload data and re-render
+      await loadData();
+      // Flash the dispatched unit card briefly
+      const card = document.getElementById('unit-' + unitId);
+      if (card) {
+        card.style.borderColor = '#22c55e';
+        card.style.background = '#f0fdf4';
+        setTimeout(() => {
+          card.style.borderColor = '';
+          card.style.background = '';
+        }, 2000);
+      }
+    } else {
+      const err = await res.json();
+      alert('Dispatch failed: ' + (err.detail || 'Unknown error'));
+    }
+  }
+
+  // ── Modal ──
+  function openAddModal() {
+    document.getElementById('modal-title').textContent = 'Add New Resource';
+    document.getElementById('edit-unit-id').value = '';
+    document.getElementById('f-unit-id').value = '';
+    document.getElementById('f-unit-id').disabled = false;
+    document.getElementById('f-unit-type').value = 'Ambulance';
+    document.getElementById('f-driver').value = '';
+    document.getElementById('f-contact').value = '';
+    document.getElementById('f-station').value = '';
+    document.getElementById('f-hospital').value = '';
+    document.getElementById('f-city').value = 'Kochi';
+    document.getElementById('f-status').value = 'Standby';
+    document.getElementById('resource-modal').classList.remove('hidden');
+    document.getElementById('resource-modal').classList.add('flex');
+  }
+
+  function openEditModal(unitId) {
+    const unit = allFleet.find(u => u.unit_id === unitId);
+    if (!unit) return;
+    document.getElementById('modal-title').textContent = 'Edit Resource';
+    document.getElementById('edit-unit-id').value = unit.unit_id;
+    document.getElementById('f-unit-id').value = unit.unit_id;
+    document.getElementById('f-unit-id').disabled = true;
+    document.getElementById('f-unit-type').value = unit.unit_type;
+    document.getElementById('f-driver').value = unit.driver_name || '';
+    document.getElementById('f-contact').value = unit.contact || '';
+    document.getElementById('f-station').value = unit.station_name || '';
+    document.getElementById('f-hospital').value = unit.hospital_name || '';
+    document.getElementById('f-city').value = unit.city || 'Kochi';
+    document.getElementById('f-status').value = unit.current_status || 'Standby';
+    document.getElementById('resource-modal').classList.remove('hidden');
+    document.getElementById('resource-modal').classList.add('flex');
+  }
+
+  function closeModal() {
+    document.getElementById('resource-modal').classList.add('hidden');
+    document.getElementById('resource-modal').classList.remove('flex');
+  }
+
+  async function saveResource() {
+    const editId = document.getElementById('edit-unit-id').value;
+    const data = {
+      unit_id: document.getElementById('f-unit-id').value.trim(),
+      unit_type: document.getElementById('f-unit-type').value,
+      driver_name: document.getElementById('f-driver').value.trim(),
+      contact: document.getElementById('f-contact').value.trim(),
+      station_name: document.getElementById('f-station').value.trim(),
+      hospital_name: document.getElementById('f-hospital').value.trim(),
+      city: document.getElementById('f-city').value,
+      current_status: document.getElementById('f-status').value,
+    };
+    if (!data.unit_id) { alert('Unit ID is required.'); return; }
+    const url = editId ? '/api/admin/fleet/update' : '/api/admin/fleet/add';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (res.ok) { closeModal(); loadData(); }
+    else { const e = await res.json(); alert('Failed: ' + (e.detail || 'Unknown error')); }
+  }
+
+  document.getElementById('resource-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  async function loadData() {
+    const [fleetRes, incRes] = await Promise.all([
+      fetch('/api/admin/fleet'), fetch('/api/admin/incidents')
+    ]);
+    allFleet = await fleetRes.json();
+    allIncidents = await incRes.json();
+    renderIncidents();
+    renderFleet();
+  }
+
+  // ── Unit Detail Modal ──
+  async function openUnitDetail(unitId) {
+    if (selectedIncidentId) {
+      // In dispatch mode, clicking a unit dispatches it
+      selectUnit(unitId);
+      return;
+    }
+    try {
+      const res = await fetch('/api/admin/fleet/detail/' + unitId);
+      if (!res.ok) return;
+      const u = await res.json();
+      const STATUS_ICONS = {
+        'Reached Location': '📍',
+        'Picked Up Patient': '🧑‍⚕️',
+        'Going to Hospital': '🏥',
+        'Completed': '✅',
+        'En Route': '🚗',
+        'Standby': '🟢',
+      };
+      const modal = document.getElementById('unit-detail-modal');
+      const body = document.getElementById('unit-detail-body');
+      const inc = u.active_incident;
+      const steps = u.incident_steps || [];
+      body.innerHTML = `
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div class="bg-slate-50 rounded-xl p-3">
+            <p class="text-xs text-slate-400 uppercase font-bold mb-1">Unit ID</p>
+            <p class="font-bold font-mono text-slate-800">${u.unit_id}</p>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3">
+            <p class="text-xs text-slate-400 uppercase font-bold mb-1">Type</p>
+            <p class="font-bold text-slate-800">${u.unit_type || '—'}</p>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3">
+            <p class="text-xs text-slate-400 uppercase font-bold mb-1">Status</p>
+            <span class="font-bold text-sm px-2 py-1 rounded-full ${u.current_status === 'Standby' ? 'bg-green-100 text-green-700' : u.current_status === 'En Route' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'}">${STATUS_ICONS[u.current_status] || ''} ${u.current_status || 'Standby'}</span>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3">
+            <p class="text-xs text-slate-400 uppercase font-bold mb-1">Station</p>
+            <p class="font-bold text-slate-800">${u.station_name || '—'}</p>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3">
+            <p class="text-xs text-slate-400 uppercase font-bold mb-1">Driver / Officer</p>
+            <p class="font-bold text-slate-800">${u.driver_name || '—'}</p>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3">
+            <p class="text-xs text-slate-400 uppercase font-bold mb-1">Contact</p>
+            <a href="tel:${u.contact}" class="font-bold text-blue-600">${u.contact || '—'}</a>
+          </div>
+          ${u.hospital_name ? `<div class="col-span-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+            <p class="text-xs text-emerald-600 uppercase font-bold mb-1">🏥 Hospital</p>
+            <p class="font-bold text-emerald-800">${u.hospital_name}</p>
+          </div>` : ''}
+          ${u.responder ? `<div class="col-span-2 bg-cyan-50 border border-cyan-200 rounded-xl p-3">
+            <p class="text-xs text-cyan-600 uppercase font-bold mb-1">👤 Registered Responder</p>
+            <p class="font-bold text-slate-800">${u.responder.name}</p>
+            <p class="text-xs text-slate-500">${u.responder.email} · ${u.responder.phone}</p>
+          </div>` : ''}
+        </div>
+
+        ${inc ? `
+        <div class="border-t border-slate-100 pt-4">
+          <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">🚨 Active Incident</p>
+          <div class="bg-red-50 border border-red-200 rounded-xl p-4 space-y-2">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="font-bold text-red-800">${inc.user_name || 'Unknown'}</p>
+                <p class="text-xs text-slate-500">${inc.phone || ''}</p>
+              </div>
+              <span class="text-xs font-bold px-2 py-1 rounded-full ${inc.severity === 'Critical' ? 'bg-red-200 text-red-800' : 'bg-orange-100 text-orange-700'}">${inc.severity}</span>
+            </div>
+            <p class="text-sm text-slate-700"><strong>${inc.category}</strong> — ${inc.description || ''}.</p>
+            <p class="text-xs text-slate-500"><i class="fa-solid fa-location-dot mr-1 text-red-500"></i>${inc.location_details || 'Location pending'}</p>
+            ${inc.lat ? `<a href="https://maps.google.com/maps?q=${inc.lat},${inc.lng}" target="_blank" class="text-xs text-blue-600 font-bold hover:underline"><i class="fa-solid fa-map mr-1"></i>Open in Google Maps</a>` : ''}
+            <p class="text-xs text-slate-400 font-mono">ID: ${inc.id}</p>
+          </div>
+        </div>
+
+        ${steps.length ? `
+        <div class="mt-4">
+          <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">📋 Progress Timeline</p>
+          <div class="space-y-2">
+            ${steps.map(s => `
+              <div class="flex items-start gap-3 text-sm">
+                <div class="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <i class="fa-solid fa-check text-blue-600 text-xs"></i>
+                </div>
+                <div>
+                  <p class="font-bold text-slate-800">${s.step_name}</p>
+                  ${s.notes ? `<p class="text-xs text-slate-500">${s.notes}</p>` : ''}
+                  <p class="text-xs text-slate-300">${s.completed_at ? new Date(s.completed_at).toLocaleString() : ''}</p>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+        ` : `
+        <div class="border-t border-slate-100 pt-4 text-center text-slate-400 text-sm py-4">
+          <i class="fa-solid fa-circle-check text-green-400 text-3xl mb-2 block"></i>
+          Unit is on standby — no active incident assigned.
+        </div>
+        `}
+      `;
+      document.getElementById('unit-detail-title').textContent = u.unit_id + ' — ' + (u.unit_type || 'Unit');
+      modal.classList.remove('hidden');
+    } catch(e) { console.error(e); }
+  }
+
+  function closeUnitDetail() {
+    document.getElementById('unit-detail-modal').classList.add('hidden');
+  }
+
+  setInterval(loadData, 4000);
+  loadData();
+</script>
+
+<!-- Unit Detail Modal -->
+<div id="unit-detail-modal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4 flex">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl sticky top-0">
+      <h3 class="font-bold text-lg" id="unit-detail-title">Unit Detail</h3>
+      <button onclick="closeUnitDetail()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <div class="p-6" id="unit-detail-body"></div>
+  </div>
+</div>
+
+{% endblock %}
+

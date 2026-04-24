@@ -1,0 +1,108 @@
+{% extends "admin/layout.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+  <div class="flex justify-between items-center flex-wrap gap-4">
+    <div>
+      <h1 class="text-3xl font-bold text-slate-800">Past Emergencies</h1>
+      <p class="text-slate-500">Full archive of all resolved and closed incidents.</p>
+    </div>
+    <div class="flex gap-3">
+      <input id="search-input" type="text" placeholder="Search by user or category..." oninput="filterTable()"
+        class="border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white w-64">
+      <select id="category-filter" onchange="filterTable()"
+        class="border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+        <option value="">All Categories</option>
+        <option>Medical</option><option>Fire</option><option>Security</option><option>General</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <table class="w-full text-left">
+      <thead class="bg-slate-900 text-white text-xs uppercase">
+        <tr>
+          <th class="p-4">Incident ID</th>
+          <th class="p-4">User</th>
+          <th class="p-4">Category</th>
+          <th class="p-4">Severity</th>
+          <th class="p-4">Location</th>
+          <th class="p-4">Unit Deployed</th>
+          <th class="p-4">Date</th>
+          <th class="p-4">Status</th>
+        </tr>
+      </thead>
+      <tbody id="past-table" class="divide-y divide-slate-100 text-sm"></tbody>
+    </table>
+    <div id="empty-state" class="hidden p-12 text-center text-slate-400 italic">No resolved incidents found.</div>
+  </div>
+
+  <div class="flex justify-between items-center text-sm text-slate-500">
+    <span id="result-count">0 records</span>
+    <button onclick="downloadCSV()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-50 transition flex items-center gap-2">
+      <i class="fa-solid fa-file-csv text-green-600"></i> Export CSV
+    </button>
+  </div>
+</div>
+
+<script>
+  let allData = [];
+
+  function severityBadge(s) {
+    const map = { Critical: 'bg-red-100 text-red-700', High: 'bg-orange-100 text-orange-700', Medium: 'bg-yellow-100 text-yellow-700', Low: 'bg-green-100 text-green-700' };
+    return map[s] || 'bg-slate-100 text-slate-600';
+  }
+
+  function renderTable(data) {
+    const tbody = document.getElementById('past-table');
+    const empty = document.getElementById('empty-state');
+    document.getElementById('result-count').textContent = `${data.length} record${data.length !== 1 ? 's' : ''}`;
+
+    if (!data.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
+    empty.classList.add('hidden');
+
+    tbody.innerHTML = data.map(inc => `
+      <tr class="hover:bg-slate-50 transition">
+        <td class="p-4 font-mono text-blue-600 text-xs">${inc.id.slice(0,12).toUpperCase()}</td>
+        <td class="p-4 font-bold text-slate-800">${inc.user_name || inc.user_id || '—'}</td>
+        <td class="p-4"><span class="px-2 py-1 bg-slate-100 rounded text-xs font-medium">${inc.category || '—'}</span></td>
+        <td class="p-4"><span class="px-2 py-1 rounded-full text-xs font-bold ${severityBadge(inc.severity)}">${inc.severity || '—'}</span></td>
+        <td class="p-4 text-slate-500 text-xs max-w-[160px] truncate">${inc.location_details || (inc.lat ? `${parseFloat(inc.lat).toFixed(3)}, ${parseFloat(inc.lng).toFixed(3)}` : '—')}</td>
+        <td class="p-4 text-slate-600">${inc.assigned_unit || '—'}</td>
+        <td class="p-4 text-slate-400 text-xs">${new Date(inc.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</td>
+        <td class="p-4"><span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Resolved</span></td>
+      </tr>`).join('');
+  }
+
+  function filterTable() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    const cat = document.getElementById('category-filter').value;
+    let filtered = allData;
+    if (q) filtered = filtered.filter(i => (i.user_name || i.user_id || '').toLowerCase().includes(q) || (i.category || '').toLowerCase().includes(q));
+    if (cat) filtered = filtered.filter(i => i.category === cat);
+    renderTable(filtered);
+  }
+
+  function downloadCSV() {
+    const rows = [['ID','User','Category','Severity','Location','Unit','Date','Status']];
+    allData.forEach(i => rows.push([
+      i.id, i.user_name || i.user_id, i.category, i.severity,
+      i.location_details || '', i.assigned_unit || '', i.created_at, 'Resolved'
+    ]));
+    const csv = rows.map(r => r.map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'past_emergencies.csv';
+    a.click();
+  }
+
+  async function load() {
+    const res = await fetch('/api/admin/incidents');
+    const data = await res.json();
+    allData = data.filter(i => i.status === 'closed' || i.status === 'resolved');
+    filterTable();
+  }
+
+  load();
+</script>
+{% endblock %}

@@ -1,0 +1,7 @@
+Initialize Database: python database.py (Only once).
+
+Start Server: uvicorn main:app --reload
+
+Open Admin: http://localhost:8000/admin/feed
+
+Open User App: http://localhost:8000/ (Click SOS).

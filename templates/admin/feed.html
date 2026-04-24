@@ -1,0 +1,490 @@
+{% extends "admin/layout.html" %}
+
+{% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<div class="max-w-7xl mx-auto space-y-6">
+
+  <!-- Stats Row -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+      <div class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Active Voice</div>
+      <div id="stat-active" class="text-3xl font-bold text-blue-600">0</div>
+    </div>
+    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+      <div class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Dispatched</div>
+      <div id="stat-allocated" class="text-3xl font-bold text-orange-600">0</div>
+    </div>
+    <div class="bg-red-50 p-5 rounded-2xl shadow-sm border border-red-200">
+      <div class="text-red-400 text-xs font-bold uppercase tracking-widest mb-1">⚠ Critical</div>
+      <div id="stat-critical" class="text-3xl font-bold text-red-600">0</div>
+    </div>
+    <div class="bg-green-50 p-5 rounded-2xl shadow-sm border border-green-200">
+      <div class="text-green-400 text-xs font-bold uppercase tracking-widest mb-1">Resolved Today</div>
+      <div id="stat-resolved" class="text-3xl font-bold text-green-600">0</div>
+    </div>
+  </div>
+
+  <!-- Map + Standby Resources -->
+  <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <div class="lg:col-span-3 bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200" style="height:380px; position:relative; z-index:1;">
+      <div id="map" class="h-full w-full"></div>
+    </div>
+    <div class="bg-white p-5 rounded-2xl shadow-xl border border-slate-200 flex flex-col">
+      <h2 class="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
+        <i class="fa-solid fa-truck-medical text-green-500"></i> Fleet Status
+      </h2>
+      <div id="standby-resources" class="space-y-2 flex-1 overflow-y-auto text-sm">
+        <p class="text-slate-400 text-xs italic">Loading fleet...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Critical / Active Incidents -->
+  <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+    <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center flex-wrap gap-2">
+      <h2 class="text-base font-bold flex items-center gap-2">
+        <span class="w-2 h-2 bg-red-500 rounded-full animate-ping inline-block"></span>
+        Real-Time Incidents
+      </h2>
+      <div class="flex gap-2 text-xs flex-wrap">
+        <button onclick="filterIncidents('all')" id="filter-all" class="filter-btn active px-3 py-1 rounded-full bg-white text-slate-900 font-bold">All</button>
+        <button onclick="filterIncidents('Critical')" id="filter-critical" class="filter-btn px-3 py-1 rounded-full bg-slate-700 text-white font-bold">Critical</button>
+        <button onclick="filterIncidents('active')" id="filter-active" class="filter-btn px-3 py-1 rounded-full bg-slate-700 text-white font-bold">Active</button>
+        <button onclick="filterIncidents('resolved')" id="filter-resolved" class="filter-btn px-3 py-1 rounded-full bg-slate-700 text-white font-bold">Resolved</button>
+      </div>
+    </div>
+    <div id="incident-cards" class="divide-y divide-slate-100"></div>
+  </div>
+</div>
+
+<!-- Incident Detail Modal — fixed z-index above map -->
+<div id="incident-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4" style="z-index: 10000;">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl sticky top-0 z-10">
+      <h3 class="font-bold text-lg" id="modal-title">Incident Details</h3>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="p-6 space-y-4" id="modal-body"></div>
+  </div>
+</div>
+
+<style>
+  .filter-btn.active { background: white !important; color: #0f172a !important; }
+  .severity-critical { border-left: 4px solid #ef4444; }
+  .severity-high { border-left: 4px solid #f97316; }
+  .severity-medium { border-left: 4px solid #eab308; }
+  .severity-low { border-left: 4px solid #22c55e; }
+  #incident-modal { pointer-events: auto; }
+  .step-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .step-done { background: #dcfce7; color: #166534; }
+  .step-pending { background: #f1f5f9; color: #64748b; }
+</style>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const kochiCenter = [9.9312, 76.2673];
+  const map = L.map('map', { zoomControl: true }).setView(kochiCenter, 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 19
+  }).addTo(map);
+
+  let allIncidents = [], allFleet = [], activeFilter = 'all';
+  const activeMarkers = [], activeLines = [];
+
+  function clearMap() {
+    activeMarkers.forEach(m => map.removeLayer(m));
+    activeLines.forEach(l => map.removeLayer(l));
+    activeMarkers.length = 0; activeLines.length = 0;
+  }
+
+  function resourceIcon(type) {
+    const icons = {
+      'Ambulance': { html: '🚑', color: '#10b981' },
+      'Fire Truck': { html: '🚒', color: '#ef4444' },
+      'Police': { html: '🚔', color: '#3b82f6' },
+    };
+    const cfg = icons[type] || { html: '🚗', color: '#64748b' };
+    return L.divIcon({
+      html: `<div style="background:${cfg.color};border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${cfg.html}</div>`,
+      iconSize: [32, 32], iconAnchor: [16, 16], className: ''
+    });
+  }
+
+  function severityColor(s) {
+    if (s === 'Critical') return 'text-red-600 bg-red-50 border border-red-200';
+    if (s === 'High') return 'text-orange-600 bg-orange-50 border border-orange-200';
+    if (s === 'Medium') return 'text-yellow-600 bg-yellow-50 border border-yellow-200';
+    return 'text-green-600 bg-green-50 border border-green-200';
+  }
+
+  function filterIncidents(filter) {
+    activeFilter = filter;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('filter-' + filter)?.classList.add('active');
+    renderIncidentCards();
+  }
+
+  function renderFleetSidebar() {
+    const container = document.getElementById('standby-resources');
+    if (!allFleet.length) { container.innerHTML = '<p class="text-slate-400 text-xs italic">No fleet data.</p>'; return; }
+    const types = ['Ambulance', 'Fire Truck', 'Police'];
+    const typeEmojis = { 'Ambulance': '🚑', 'Fire Truck': '🚒', 'Police': '🚔' };
+    const statusColors = { 'Standby': 'text-green-600 bg-green-50', 'En Route': 'text-orange-600 bg-orange-50', 'Unavailable': 'text-red-600 bg-red-50' };
+    container.innerHTML = types.map(type => {
+      const units = allFleet.filter(u => u.unit_type === type);
+      if (!units.length) return '';
+      return `<div class="mb-3">
+        <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">${typeEmojis[type]} ${type}</p>
+        ${units.map(u => `<div class="flex items-center justify-between py-1 border-b border-slate-50">
+          <span class="text-xs text-slate-700 font-mono">${u.unit_id.split('-').slice(-1)[0]}</span>
+          <span class="text-xs font-bold px-2 py-0.5 rounded-full ${statusColors[u.current_status] || 'bg-slate-100 text-slate-600'}">${u.current_status}</span>
+        </div>`).join('')}
+      </div>`;
+    }).join('');
+  }
+
+  function renderIncidentCards() {
+    let filtered = allIncidents;
+    if (activeFilter === 'Critical') filtered = allIncidents.filter(i => i.severity === 'Critical');
+    else if (activeFilter === 'active') filtered = allIncidents.filter(i => i.status !== 'closed' && i.status !== 'resolved');
+    else if (activeFilter === 'resolved') filtered = allIncidents.filter(i => i.status === 'closed' || i.status === 'resolved');
+    filtered.sort((a, b) => {
+      const sev = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+      const sa = sev[a.severity] ?? 2, sb = sev[b.severity] ?? 2;
+      if (sa !== sb) return sa - sb;
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+    const container = document.getElementById('incident-cards');
+    if (!filtered.length) {
+      container.innerHTML = '<div class="p-8 text-center text-slate-400 italic">No incidents in this category.</div>';
+      return;
+    }
+    container.innerHTML = filtered.map(inc => {
+      const isResolved = inc.status === 'closed' || inc.status === 'resolved';
+      const isCritical = inc.severity === 'Critical';
+      const severityClass = `severity-${(inc.severity || 'medium').toLowerCase()}`;
+      const time = new Date(inc.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      const dupBadge = (inc.duplicate_count || 0) > 0 ? `<span class="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-bold">+${inc.duplicate_count} reports</span>` : '';
+      return `
+        <div class="p-5 hover:bg-slate-50 transition cursor-pointer ${severityClass} ${isCritical && !isResolved ? 'bg-red-50' : ''}"
+          onclick="openIncidentModal('${inc.id}')">
+          <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-2 flex-wrap">
+                ${isCritical && !isResolved ? '<span class="animate-pulse text-red-600 text-xs font-bold uppercase">⚠ CRITICAL</span>' : ''}
+                <span class="font-mono text-xs text-slate-400">${inc.id.slice(0,8).toUpperCase()}</span>
+                <span class="text-xs px-2 py-0.5 rounded-full font-bold ${severityColor(inc.severity)}">${inc.severity || 'Medium'}</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${inc.category || 'General'}</span>
+                ${dupBadge}
+              </div>
+              <p class="font-bold text-slate-800 mb-1">${inc.user_name || inc.user_id || 'Unknown Citizen'}</p>
+              <p class="text-sm text-slate-500 mb-1"><i class="fa-solid fa-location-dot mr-1"></i>${inc.location_details || (inc.lat ? `${parseFloat(inc.lat).toFixed(4)}, ${parseFloat(inc.lng).toFixed(4)}` : 'Location not confirmed')}</p>
+              <p class="text-sm text-slate-600 italic">${(inc.description || inc.transcript || 'Awaiting details...').slice(0,100)}</p>
+            </div>
+            <div class="flex flex-col items-end gap-2 min-w-[130px]">
+              <span class="text-xs text-slate-400">${time}</span>
+              <span class="text-xs font-bold px-3 py-1 rounded-full ${isResolved ? 'bg-green-100 text-green-700' : inc.status === 'RESOURCE_ALLOCATED' ? 'bg-orange-100 text-orange-700' : inc.status === 'voice_active' ? 'bg-cyan-100 text-cyan-700' : 'bg-blue-100 text-blue-700'}">
+                ${isResolved ? '✓ Resolved' : inc.status === 'RESOURCE_ALLOCATED' ? '🚑 Dispatched' : inc.status === 'voice_active' ? '🎙 Voice Active' : '● ' + (inc.status || 'Active')}
+              </span>
+              ${inc.assigned_unit ? `<span class="text-xs text-slate-400">Unit: ${inc.assigned_unit}</span>` : ''}
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  async function openIncidentModal(incidentId) {
+    const inc = allIncidents.find(i => i.id === incidentId);
+    if (!inc) return;
+    const modal = document.getElementById('incident-modal');
+    const body = document.getElementById('modal-body');
+    document.getElementById('modal-title').textContent = `Incident ${inc.id.slice(0,10).toUpperCase()}`;
+
+    // Load steps from API
+    let steps = [], incDetails = inc;
+    try {
+      const r = await fetch('/api/incident/steps/' + incidentId);
+      if (r.ok) { const d = await r.json(); steps = d.steps; incDetails = {...inc, ...d.incident}; }
+    } catch(e){}
+
+    const isResolved = incDetails.status === 'closed' || incDetails.status === 'resolved';
+    const isDispatched = incDetails.status === 'RESOURCE_ALLOCATED' || incDetails.assigned_unit;
+
+    // Step tracker
+    const step1Done = !!incDetails.assigned_unit;
+    const step2Done = !!incDetails.step2_relatives_alerted;
+    const step3Status = incDetails.step3_followup_status || 'pending';
+    const step4Done = !!incDetails.step4_safe_confirmed;
+
+    const stepTracker = `
+      <div class="col-span-2 bg-slate-50 rounded-xl p-4">
+        <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Response Progress</p>
+        <div class="flex items-center gap-1 flex-wrap">
+          <span class="step-badge ${step1Done ? 'step-done' : 'step-pending'}">
+            ${step1Done ? '✓' : '○'} Step 1: Dispatched
+          </span>
+          <span class="text-slate-300 text-xs">→</span>
+          <span class="step-badge ${step2Done ? 'step-done' : 'step-pending'}">
+            ${step2Done ? '✓' : '○'} Step 2: Relatives Alerted
+          </span>
+          <span class="text-slate-300 text-xs">→</span>
+          <span class="step-badge ${step3Status === 'safe' ? 'step-done' : step3Status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'step-pending'}">
+            ${step3Status === 'safe' ? '✓' : step3Status === 'in_progress' ? '●' : '○'} Step 3: Follow-up
+          </span>
+          <span class="text-slate-300 text-xs">→</span>
+          <span class="step-badge ${step4Done ? 'step-done' : 'step-pending'}">
+            ${step4Done ? '✓' : '○'} Step 4: Person Safe
+          </span>
+        </div>
+        ${incDetails.safe_location ? `<p class="text-xs text-green-700 mt-2"><i class="fa-solid fa-house-circle-check mr-1"></i>Safe at: <strong>${incDetails.safe_location}</strong></p>` : ''}
+      </div>`;
+
+    // Ambulance hospital display
+    const hospitalLine = incDetails.assigned_hospital ? `
+      <div class="col-span-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
+        <i class="fa-solid fa-hospital text-emerald-600 text-xl"></i>
+        <div>
+          <p class="text-xs text-emerald-600 font-bold uppercase">Taking Patient To</p>
+          <p class="font-bold text-emerald-800">${incDetails.assigned_hospital}</p>
+        </div>
+      </div>` : '';
+
+    body.innerHTML = `
+      <div class="grid grid-cols-2 gap-4">
+        ${stepTracker}
+        <div>
+          <p class="text-xs text-slate-400 uppercase font-bold mb-1">Caller</p>
+          <p class="font-bold text-slate-800">${incDetails.user_name || incDetails.user_id}</p>
+          ${incDetails.phone ? `<p class="text-sm text-slate-500">${incDetails.phone}</p>` : ''}
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 uppercase font-bold mb-1">Severity / Category</p>
+          <p class="font-bold ${incDetails.severity === 'Critical' ? 'text-red-600' : 'text-slate-800'}">${incDetails.severity || 'Medium'} · ${incDetails.category || 'General'}</p>
+        </div>
+        <div class="col-span-2">
+          <p class="text-xs text-slate-400 uppercase font-bold mb-1">Location</p>
+          <p class="text-slate-700">${incDetails.location_details || (incDetails.lat ? `${parseFloat(incDetails.lat).toFixed(5)}, ${parseFloat(incDetails.lng).toFixed(5)}` : 'Not confirmed')}</p>
+          ${incDetails.landmark ? `<p class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-map-pin mr-1"></i>${incDetails.landmark}</p>` : ''}
+        </div>
+        <div class="col-span-2">
+          <p class="text-xs text-slate-400 uppercase font-bold mb-1">Description</p>
+          <p class="text-slate-700 bg-slate-50 rounded-lg p-3 text-sm">${incDetails.description || incDetails.transcript || 'No details yet.'}</p>
+        </div>
+        ${hospitalLine}
+        ${incDetails.assigned_unit ? `<div class="col-span-2 bg-orange-50 border border-orange-200 rounded-xl p-3">
+          <p class="text-xs text-orange-600 font-bold uppercase mb-1"><i class="fa-solid fa-truck-fast mr-1"></i>Dispatched Unit</p>
+          <p class="font-bold text-orange-800">${incDetails.assigned_unit} ${incDetails.assigned_unit_type ? '· ' + incDetails.assigned_unit_type : ''}</p>
+          ${incDetails.resource_contact ? `<p class="text-sm text-slate-600 mt-1"><i class="fa-solid fa-phone mr-1"></i>${incDetails.resource_contact}</p>` : ''}
+          ${(() => {
+            const statusMap = { 'reached_location': ['📍 Reached Location', 'bg-blue-100 text-blue-700'], 'picked_up': ['🧑‍⚕️ Picked Up Patient', 'bg-amber-100 text-amber-700'], 'going_to_hospital': ['🏥 Going to Hospital', 'bg-purple-100 text-purple-700'], 'completed': ['✅ Mission Complete', 'bg-green-100 text-green-700'], 'dispatched': ['🚗 En Route', 'bg-orange-100 text-orange-700'] };
+            const cfg = statusMap[incDetails.unit_status || 'dispatched'] || ['🚗 Dispatched', 'bg-slate-100 text-slate-700'];
+            return `<span class="mt-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${cfg[1]}">${cfg[0]}</span>`;
+          })()}
+        </div>` : ''}
+        ${(incDetails.duplicate_count || 0) > 0 ? `<div class="col-span-2 bg-purple-50 border border-purple-200 rounded-xl p-3">
+          <p class="text-xs text-purple-700 font-bold"><i class="fa-solid fa-copy mr-1"></i>${incDetails.duplicate_count} other people also reported this incident</p>
+        </div>` : ''}
+      </div>
+
+      ${isDispatched && !isResolved ? `
+      <div class="border-t border-slate-100 pt-4">
+        <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Post-Dispatch Actions</p>
+        <div class="grid grid-cols-1 gap-3">
+          ${!step2Done ? `<div class="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
+            <i class="fa-solid fa-users text-blue-600 text-lg"></i>
+            <div class="flex-1">
+              <p class="text-sm font-bold text-blue-800">Step 2: Alert Relatives</p>
+              <p class="text-xs text-blue-600">Notify emergency contacts of the situation</p>
+            </div>
+            <button onclick="markStep2('${incDetails.id}')" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 transition whitespace-nowrap">Mark Done</button>
+          </div>` : '<div class="text-xs text-green-600 font-bold">✓ Step 2: Relatives notified</div>'}
+          
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-3">
+            <div class="flex items-center gap-3 mb-2">
+              <i class="fa-solid fa-phone-volume text-amber-600 text-lg"></i>
+              <div class="flex-1">
+                <p class="text-sm font-bold text-amber-800">Step 3: Follow-up Status</p>
+                <p class="text-xs text-amber-600">Current: <strong>${step3Status}</strong></p>
+              </div>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button onclick="markStep3('${incDetails.id}','in_progress')" class="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-amber-600 transition">In Progress</button>
+              <button onclick="markStep3('${incDetails.id}','at_hospital')" class="bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-600 transition">At Hospital</button>
+              <button onclick="markStep3('${incDetails.id}','at_station')" class="bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-600 transition">At Police Station</button>
+              <button onclick="markStep3('${incDetails.id}','safe')" class="bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-600 transition">Safe ✓</button>
+            </div>
+          </div>
+
+          ${!step4Done ? `<div class="bg-green-50 border border-green-200 rounded-xl p-3">
+            <div class="flex items-center gap-3 mb-2">
+              <i class="fa-solid fa-house-circle-check text-green-600 text-lg"></i>
+              <div class="flex-1">
+                <p class="text-sm font-bold text-green-800">Step 4: Confirm Person is Safe</p>
+                <p class="text-xs text-green-600">Where did the person reach safely?</p>
+              </div>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              ${incDetails.assigned_hospital ? `<button onclick="markStep4('${incDetails.id}','${incDetails.assigned_hospital}')" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-700 transition">🏥 ${incDetails.assigned_hospital}</button>` : ''}
+              <button onclick="markStep4SafeInput('${incDetails.id}')" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700 transition">📍 Custom Location</button>
+              <button onclick="markStep4('${incDetails.id}','Home / Safe Location')" class="bg-teal-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-teal-700 transition">🏠 Home</button>
+            </div>
+            <div id="step4-input-${incDetails.id}" class="hidden mt-2 flex gap-2">
+              <input type="text" id="step4-loc-${incDetails.id}" placeholder="e.g. Aster Medcity, Kochi" class="flex-1 text-xs bg-white border border-green-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-green-400">
+              <button onclick="markStep4('${incDetails.id}',document.getElementById('step4-loc-${incDetails.id}').value)" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Confirm</button>
+            </div>
+          </div>` : `<div class="text-xs text-green-600 font-bold bg-green-50 rounded-xl p-3">✓ Step 4: Person confirmed safe at ${incDetails.safe_location}</div>`}
+        </div>
+      </div>` : ''}
+
+      <div class="flex gap-3 pt-4 border-t border-slate-100 flex-wrap">
+        ${incDetails.phone ? `<button onclick="contactCitizen('${incDetails.phone}')" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition">
+          <i class="fa-solid fa-phone"></i> Contact Citizen
+        </button>` : ''}
+        ${!incDetails.assigned_unit && !isResolved ? `<a href="/admin/fleet" class="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl font-bold text-sm hover:bg-orange-600 transition">
+          <i class="fa-solid fa-truck-fast"></i> Allocate Resource
+        </a>` : ''}
+        ${!isResolved ? `<button onclick="resolveIncident('${incDetails.id}')" class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 transition">
+          <i class="fa-solid fa-circle-check"></i> Close & Generate Report
+        </button>` : `<a href="/api/incident/report/${incDetails.id}" target="_blank" class="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition">
+          <i class="fa-solid fa-file-lines"></i> View Full Report
+        </a>`}
+      </div>`;
+
+    modal.classList.remove('hidden');
+    if (incDetails.lat && incDetails.lng) map.setView([incDetails.lat, incDetails.lng], 15);
+  }
+
+  function closeModal() {
+    document.getElementById('incident-modal').classList.add('hidden');
+  }
+
+  function contactCitizen(phone) {
+    alert(`Contacting citizen at: ${phone}\n\nIn production this would initiate a direct call or SMS.`);
+  }
+
+  async function markStep2(incidentId) {
+    // Show relatives first
+    try {
+      const res = await fetch('/api/admin/relatives/' + incidentId);
+      if (res.ok) {
+        const data = await res.json();
+        const contacts = data.contacts || [];
+        if (contacts.length > 0) {
+          const names = contacts.map(c => `${c.name} (${c.relation}): ${c.phone}`).join('\n');
+          const proceed = confirm(`Emergency contacts for this incident:\n\n${names}\n\nMark relatives as ALERTED?`);
+          if (!proceed) return;
+        }
+      }
+    } catch(e) {}
+    await fetch('/api/admin/followup', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ incident_id: incidentId, step: 2, notes: 'Emergency contacts notified by dispatcher' }) });
+    openIncidentModal(incidentId);
+  }
+
+  async function markStep3(incidentId, status) {
+    const labels = { in_progress: 'Unit en route, situation being handled', at_hospital: 'Person being taken to hospital', at_station: 'Person at police station', safe: 'Person confirmed safe' };
+    await fetch('/api/admin/followup', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ incident_id: incidentId, step: 3, status, notes: labels[status] || status }) });
+    openIncidentModal(incidentId);
+  }
+
+  function markStep4SafeInput(incidentId) {
+    const el = document.getElementById('step4-input-' + incidentId);
+    if (el) el.classList.toggle('hidden');
+  }
+
+  async function markStep4(incidentId, location) {
+    if (!location || !location.trim()) return;
+    await fetch('/api/admin/followup', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ incident_id: incidentId, step: 4, safe_location: location, notes: 'Person confirmed safe' }) });
+    openIncidentModal(incidentId);
+  }
+
+  async function resolveIncident(incidentId) {
+    if (!confirm('Close this emergency and generate the final report?')) return;
+    const res = await fetch('/api/admin/resolve-incident', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ incident_id: incidentId })
+    });
+    if (res.ok) {
+      // Broadcast closure via BroadcastChannel so citizen tab is notified immediately
+      try {
+        const bc = new BroadcastChannel('gs_incident_events');
+        bc.postMessage({ type: 'incident_closed', incidentId });
+        bc.close();
+      } catch(e) {}
+      closeModal();
+      updateDashboard();
+    } else alert('Failed to resolve incident.');
+  }
+
+  async function updateDashboard() {
+    const [incRes, fleetRes] = await Promise.all([
+      fetch('/api/admin/incidents'), fetch('/api/admin/fleet')
+    ]);
+    allIncidents = await incRes.json();
+    allFleet = await fleetRes.json();
+
+    const active = allIncidents.filter(i => i.status === 'voice_active').length;
+    const dispatched = allIncidents.filter(i => i.status === 'RESOURCE_ALLOCATED').length;
+    const critical = allIncidents.filter(i => i.severity === 'Critical' && i.status !== 'closed' && i.status !== 'resolved').length;
+    const resolved = allIncidents.filter(i => (i.status === 'closed' || i.status === 'resolved') &&
+      new Date(i.resolved_at || i.updated_at) > new Date(Date.now() - 86400000)).length;
+
+    document.getElementById('stat-active').innerText = active;
+    document.getElementById('stat-allocated').innerText = dispatched;
+    document.getElementById('stat-critical').innerText = critical;
+    document.getElementById('stat-resolved').innerText = resolved;
+
+    clearMap();
+    const coords = [];
+    // Plot active incidents
+    allIncidents.filter(i => i.lat && i.lng && i.status !== 'closed' && i.status !== 'resolved').forEach(inc => {
+      const color = inc.severity === 'Critical' ? '#dc2626' : inc.severity === 'High' ? '#ea580c' : '#2563eb';
+      const m = L.circleMarker([inc.lat, inc.lng], {
+        radius: inc.severity === 'Critical' ? 14 : 10,
+        fillColor: color, color: '#fff', fillOpacity: 0.85, weight: 2
+      }).addTo(map);
+      m.bindPopup(`<strong>${inc.category || 'Incident'}</strong><br>Severity: ${inc.severity}<br>${inc.user_name || ''}<br>${inc.location_details || ''}`);
+      m.on('click', () => openIncidentModal(inc.id));
+      activeMarkers.push(m);
+      coords.push([inc.lat, inc.lng]);
+    });
+
+    // Plot fleet with proper icons
+    allFleet.forEach(u => {
+      if (u.last_lat && u.last_lng) {
+        const m = L.marker([u.last_lat, u.last_lng], { icon: resourceIcon(u.unit_type) }).addTo(map);
+        const hospitalLine = u.hospital_name ? `<br>🏥 ${u.hospital_name}` : '';
+        m.bindPopup(`<strong>${u.unit_id}</strong><br>${u.unit_type} · ${u.current_status}<br>${u.station_name || u.city || ''}${hospitalLine}`);
+        activeMarkers.push(m);
+        coords.push([u.last_lat, u.last_lng]);
+      }
+    });
+
+    // Draw dispatch lines
+    allIncidents.forEach(inc => {
+      if (inc.assigned_unit && inc.lat && inc.lng) {
+        const unit = allFleet.find(u => u.unit_id === inc.assigned_unit);
+        if (unit?.last_lat && unit?.last_lng) {
+          const line = L.polyline([[inc.lat, inc.lng], [unit.last_lat, unit.last_lng]],
+            { color: '#2563eb', weight: 4, dashArray: '10,8', opacity: 0.7 }).addTo(map);
+          activeLines.push(line);
+        }
+      }
+    });
+    if (coords.length > 0) map.fitBounds(coords, { padding: [30, 30] });
+
+    renderFleetSidebar();
+    renderIncidentCards();
+  }
+
+  document.getElementById('incident-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  setInterval(updateDashboard, 5000);
+  updateDashboard();
+</script>
+{% endblock %}

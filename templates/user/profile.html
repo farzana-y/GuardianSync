@@ -1,0 +1,325 @@
+{% extends "user/layout.html" %}
+
+{% block content %}
+<div class="max-w-4xl">
+
+  {% if success %}
+  <div class="mb-6 bg-green-50 border border-green-300 text-green-700 rounded-xl px-5 py-4 flex items-center gap-3">
+    <i class="fa-solid fa-circle-check text-green-500 text-xl"></i><span>{{ success }}</span>
+  </div>
+  {% endif %}
+  {% if error %}
+  <div class="mb-6 bg-red-50 border border-red-300 text-red-700 rounded-xl px-5 py-4 flex items-center gap-3">
+    <i class="fa-solid fa-circle-exclamation text-red-500 text-xl"></i><span>{{ error }}</span>
+  </div>
+  {% endif %}
+
+  <!-- ══════════════════════════════════════════ -->
+  <!--  CARD VIEW (default)                       -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="card-view">
+    <!-- Medical ID Card -->
+    <div class="relative rounded-3xl overflow-hidden shadow-2xl mb-8"
+      style="background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%); min-height: 200px;">
+      <!-- Decorative circles -->
+      <div class="absolute top-0 right-0 w-64 h-64 rounded-full opacity-10" style="background: radial-gradient(circle, #3b82f6, transparent); transform: translate(30%, -30%);"></div>
+      <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full opacity-10" style="background: radial-gradient(circle, #06b6d4, transparent); transform: translate(-30%, 30%);"></div>
+
+      <div class="relative p-8 text-white">
+        <div class="flex justify-between items-start mb-6">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <i class="fa-solid fa-shield-halved text-cyan-400 text-xl"></i>
+              <span class="text-cyan-400 font-bold tracking-widest text-sm uppercase">GuardianSync</span>
+            </div>
+            <p class="text-xs text-slate-400 uppercase tracking-widest">Emergency Medical ID</p>
+          </div>
+          {% if profile and profile.medical_id %}
+          <div class="text-right">
+            <p class="text-xs text-slate-400 mb-1">Medical ID</p>
+            <p class="font-mono font-bold text-cyan-300 text-lg tracking-wider">{{ profile.medical_id }}</p>
+          </div>
+          {% else %}
+          <span class="bg-amber-400 text-amber-900 text-xs font-bold px-3 py-1 rounded-full">No ID yet</span>
+          {% endif %}
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div>
+            <p class="text-xs text-slate-400 uppercase tracking-widest mb-1">Name</p>
+            <p class="font-bold text-white">{{ profile.full_name if profile and profile.full_name else '—' }}</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 uppercase tracking-widest mb-1">Blood Group</p>
+            <p class="font-bold text-red-400 text-xl">{{ profile.blood_type if profile and profile.blood_type else '—' }}</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 uppercase tracking-widest mb-1">Allergies</p>
+            <p class="font-bold text-white text-sm">{{ profile.allergies if profile and profile.allergies else 'None' }}</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 uppercase tracking-widest mb-1">Conditions</p>
+            <p class="font-bold text-white text-sm">{{ profile.conditions if profile and profile.conditions else 'None' }}</p>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-slate-700 flex justify-between items-end">
+          <div>
+            <p class="text-xs text-slate-400 mb-1">Address</p>
+            <p class="text-sm text-slate-300">{{ profile.address if profile and profile.address else '—' }}</p>
+          </div>
+          <button onclick="switchToEdit()"
+            class="flex items-center gap-2 bg-white/10 hover:bg-white/20 transition border border-white/20 text-white text-sm font-bold px-4 py-2 rounded-xl backdrop-blur-sm">
+            <i class="fa-solid fa-pen"></i> Edit Profile
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info rows below card -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <!-- Identity info -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-id-card text-blue-500"></i> Identity
+        </h3>
+        <div class="space-y-3">
+          <div class="flex justify-between">
+            <span class="text-sm text-slate-400">Date of Birth</span>
+            <span class="text-sm font-medium text-slate-700">{{ profile.dob if profile and profile.dob else '—' }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-slate-400">Aadhar</span>
+            <span class="text-sm font-mono text-slate-700">{{ profile.aadhar_number if profile and profile.aadhar_number else '—' }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-slate-400">Phone</span>
+            <span class="text-sm font-medium text-slate-700">{{ profile.phone if profile and profile.phone else '—' }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-slate-400">Weight</span>
+            <span class="text-sm font-medium text-slate-700">{{ profile.weight + ' kg' if profile and profile.weight else '—' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Emergency contacts -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-users text-blue-500"></i> Emergency Circle
+        </h3>
+        {% if contacts %}
+          <div class="space-y-3">
+            {% for c in contacts %}
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">
+                {{ c.name[0] | upper }}
+              </div>
+              <div class="flex-1">
+                <p class="text-sm font-bold text-slate-800">{{ c.name }} <span class="text-slate-400 font-normal text-xs">({{ c.relation }})</span></p>
+                <p class="text-xs text-slate-500">{{ c.phone }}</p>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-sm text-slate-400 italic">No emergency contacts added yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if not (profile and profile.medical_id) %}
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4">
+      <i class="fa-solid fa-triangle-exclamation text-amber-500 text-2xl"></i>
+      <div class="flex-1">
+        <p class="font-bold text-amber-800">Your Medical ID is not set up yet</p>
+        <p class="text-sm text-amber-600">Fill in your profile so emergency responders can access your medical info instantly.</p>
+      </div>
+      <button onclick="switchToEdit()" class="bg-amber-500 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-amber-600 transition">Set Up Now</button>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!--  EDIT FORM (hidden by default)             -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="edit-view" class="hidden">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800">Edit Medical Profile</h1>
+        <p class="text-slate-500 text-sm mt-1">Changes are saved to your permanent Medical ID.</p>
+      </div>
+      <button onclick="switchToCard()" class="flex items-center gap-2 border border-slate-200 bg-white text-slate-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-50 transition">
+        <i class="fa-solid fa-arrow-left"></i> Back to Card
+      </button>
+    </div>
+
+    <form action="/api/user/save-profile" method="POST" class="space-y-6">
+      <input type="hidden" name="user_id" value="{{ user_id }}">
+
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-id-card text-blue-500"></i> Identity
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
+            <input type="text" name="full_name" value="{{ profile.full_name if profile else '' }}" placeholder="As per Aadhar"
+              class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Date of Birth</label>
+            <input type="date" name="dob" value="{{ profile.dob if profile else '' }}"
+              class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Aadhar Number</label>
+            <input type="text" name="aadhar_number" value="{{ profile.aadhar_number if profile else '' }}" placeholder="XXXX XXXX XXXX" maxlength="14"
+              class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Phone</label>
+            <input type="text" name="phone" value="{{ profile.phone if profile else '' }}" placeholder="+91 XXXXX XXXXX"
+              class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Home Address</label>
+            <textarea name="address" rows="2" placeholder="Full address with pincode"
+              class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 text-sm">{{ profile.address if profile else '' }}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-notes-medical text-red-500"></i> Clinical
+        </h3>
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Blood Group</label>
+            <select name="blood_type" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-red-500 text-sm">
+              {% for bg in ['O+','O-','A+','A-','B+','B-','AB+','AB-'] %}
+              <option value="{{ bg }}" {% if profile and profile.blood_type == bg %}selected{% endif %}>{{ bg }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Weight (kg)</label>
+            <input type="number" name="weight" value="{{ profile.weight if profile else '' }}" placeholder="65"
+              class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-red-500 text-sm">
+          </div>
+        </div>
+        <div class="mb-4">
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Known Allergies</label>
+          <textarea name="allergies" rows="2" placeholder="e.g. Penicillin, Peanuts"
+            class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-red-500 text-sm">{{ profile.allergies if profile else '' }}</textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Past &amp; Chronic Conditions</label>
+          <textarea name="conditions" rows="2" placeholder="e.g. Type 2 Diabetes, Hypertension"
+            class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-red-500 text-sm">{{ profile.conditions if profile else '' }}</textarea>
+        </div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-users text-blue-500"></i> Emergency Circle
+        </h3>
+        <div id="contact-list" class="space-y-3 mb-4">
+          {% if contacts %}
+            {% for c in contacts %}
+            <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 group" id="contact-{{ c.id }}">
+              <div class="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm">{{ c.name[0] | upper }}</div>
+              <div class="flex-1">
+                <p class="text-sm font-bold text-slate-800">{{ c.name }} <span class="text-slate-400 font-normal">({{ c.relation }})</span></p>
+                <p class="text-xs text-slate-500">{{ c.phone }}</p>
+              </div>
+              <button type="button" onclick="deleteContact({{ c.id }})"
+                class="opacity-0 group-hover:opacity-100 transition text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p class="text-sm text-slate-400 italic" id="no-contacts-msg">No contacts yet.</p>
+          {% endif %}
+        </div>
+        <div class="pt-4 border-t border-slate-100">
+          <div class="grid grid-cols-3 gap-3 mb-3">
+            <input type="text" id="c_name" placeholder="Full Name"
+              class="text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
+            <input type="text" id="c_relation" placeholder="Relation"
+              class="text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
+            <input type="text" id="c_phone" placeholder="Phone"
+              class="text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+          <button type="button" onclick="addContactLocally()"
+            class="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-100 transition">
+            <i class="fa-solid fa-plus mr-1"></i> Add Contact
+          </button>
+        </div>
+        <input type="hidden" id="extra-contacts-json" name="extra_contacts_json" value="[]">
+      </div>
+
+      <div class="flex gap-4">
+        <button type="submit" class="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-600 transition shadow flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved"></i> Save Medical ID
+        </button>
+        <button type="button" onclick="switchToCard()" class="px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function switchToEdit() {
+    document.getElementById('card-view').classList.add('hidden');
+    document.getElementById('edit-view').classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function switchToCard() {
+    document.getElementById('edit-view').classList.add('hidden');
+    document.getElementById('card-view').classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // If page loaded after a save (success message) show card view
+  {% if success %}
+  switchToCard();
+  {% endif %}
+
+  let extraContacts = [];
+  function addContactLocally() {
+    const name = document.getElementById('c_name').value.trim();
+    const relation = document.getElementById('c_relation').value.trim();
+    const phone = document.getElementById('c_phone').value.trim();
+    if (!name || !phone) { alert('Name and phone are required.'); return; }
+    extraContacts.push({ name, relation, phone });
+    document.getElementById('extra-contacts-json').value = JSON.stringify(extraContacts);
+    const noMsg = document.getElementById('no-contacts-msg');
+    if (noMsg) noMsg.remove();
+    const list = document.getElementById('contact-list');
+    const div = document.createElement('div');
+    div.className = 'flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100';
+    div.innerHTML = `<div class="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm">${name[0].toUpperCase()}</div>
+      <div class="flex-1"><p class="text-sm font-bold text-slate-800">${name} <span class="text-slate-400 font-normal">(${relation || 'Contact'})</span></p>
+      <p class="text-xs text-slate-500">${phone} <span class="text-blue-500 ml-1">● New</span></p></div>`;
+    list.appendChild(div);
+    document.getElementById('c_name').value = '';
+    document.getElementById('c_relation').value = '';
+    document.getElementById('c_phone').value = '';
+  }
+  async function deleteContact(id) {
+    if (!confirm('Remove this contact?')) return;
+    const res = await fetch('/api/user/delete-contact/' + id, { method: 'DELETE' });
+    if (res.ok) document.getElementById('contact-' + id)?.remove();
+  }
+  const aadhar = document.querySelector('[name="aadhar_number"]');
+  if (aadhar) aadhar.addEventListener('input', function() {
+    let v = this.value.replace(/\D/g,'').slice(0,12);
+    this.value = v.replace(/(\d{4})(?=\d)/g,'$1 ');
+  });
+</script>
+{% endblock %}

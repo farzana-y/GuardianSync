@@ -1,0 +1,337 @@
+{% extends "admin/layout.html" %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<div class="max-w-7xl mx-auto space-y-8">
+  <div class="flex justify-between items-center flex-wrap gap-4">
+    <div>
+      <h1 class="text-3xl font-bold text-slate-800 flex items-center gap-3">
+        <i class="fa-solid fa-file-chart-column text-purple-500"></i> Reports &amp; Incident Analysis
+      </h1>
+      <p class="text-slate-500">Detailed incident reports and downloadable summaries.</p>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="downloadCSV()" class="bg-green-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-green-700 transition flex items-center gap-2">
+        <i class="fa-solid fa-file-csv"></i> Download CSV
+      </button>
+      <button onclick="window.print()" class="bg-slate-900 text-white px-5 py-3 rounded-xl font-bold hover:bg-slate-700 transition flex items-center gap-2">
+        <i class="fa-solid fa-print"></i> Print Report
+      </button>
+    </div>
+  </div>
+
+  <!-- Report Period Selector -->
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+    <h3 class="font-bold text-slate-500 mb-4 text-sm uppercase tracking-widest">Report Period</h3>
+    <div class="flex gap-3 flex-wrap">
+      <button onclick="setPeriod(1,this)" class="period-btn px-4 py-2 rounded-full border border-slate-200 text-sm font-bold hover:border-blue-400 hover:text-blue-600 transition">Today</button>
+      <button onclick="setPeriod(7,this)" class="period-btn px-4 py-2 rounded-full border border-slate-200 text-sm font-bold hover:border-blue-400 hover:text-blue-600 transition active">Last 7 Days</button>
+      <button onclick="setPeriod(30,this)" class="period-btn px-4 py-2 rounded-full border border-slate-200 text-sm font-bold hover:border-blue-400 hover:text-blue-600 transition">Last 30 Days</button>
+      <button onclick="setPeriod(0,this)" class="period-btn px-4 py-2 rounded-full border border-slate-200 text-sm font-bold hover:border-blue-400 hover:text-blue-600 transition">All Time</button>
+    </div>
+  </div>
+
+  <!-- KPI Summary -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="kpi-row">
+    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center">
+      <p class="text-xs text-slate-400 font-bold uppercase mb-1">Total Incidents</p>
+      <p id="r-total" class="text-4xl font-bold text-slate-800">—</p>
+    </div>
+    <div class="bg-red-50 p-5 rounded-2xl border border-red-200 shadow-sm text-center">
+      <p class="text-xs text-red-400 font-bold uppercase mb-1">Critical</p>
+      <p id="r-critical" class="text-4xl font-bold text-red-600">—</p>
+    </div>
+    <div class="bg-green-50 p-5 rounded-2xl border border-green-200 shadow-sm text-center">
+      <p class="text-xs text-green-400 font-bold uppercase mb-1">Resolved</p>
+      <p id="r-resolved" class="text-4xl font-bold text-green-600">—</p>
+    </div>
+    <div class="bg-orange-50 p-5 rounded-2xl border border-orange-200 shadow-sm text-center">
+      <p class="text-xs text-orange-400 font-bold uppercase mb-1">Avg Resolution</p>
+      <p id="r-avgtime" class="text-4xl font-bold text-orange-600">—</p>
+    </div>
+  </div>
+
+  <!-- Category Breakdown -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <h3 class="font-bold text-slate-800 mb-6">Incident Rate by Category</h3>
+      <div id="category-rates" class="space-y-4"></div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <h3 class="font-bold text-slate-800 mb-4">Severity Breakdown</h3>
+      <canvas id="report-chart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Incident Table with Report Access -->
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+      <h3 class="font-bold text-slate-800">Incident Log</h3>
+      <span id="table-count" class="text-xs text-slate-400"></span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs uppercase text-slate-400 border-b border-slate-100">
+          <tr>
+            <th class="p-4">ID</th>
+            <th class="p-4">Category</th>
+            <th class="p-4">Severity</th>
+            <th class="p-4">User</th>
+            <th class="p-4">Location</th>
+            <th class="p-4">Status</th>
+            <th class="p-4">Resolution</th>
+            <th class="p-4">Date</th>
+            <th class="p-4">Report</th>
+          </tr>
+        </thead>
+        <tbody id="report-table" class="divide-y divide-slate-50"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Full Report Modal -->
+<div id="report-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4" style="z-index:10000;">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl sticky top-0">
+      <h3 class="font-bold text-lg" id="report-modal-title">Incident Report</h3>
+      <div class="flex gap-3">
+        <button onclick="downloadCurrentReport()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1">
+          <i class="fa-solid fa-download"></i> Download
+        </button>
+        <button onclick="closeReportModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+    <div class="p-6" id="report-modal-body"></div>
+  </div>
+</div>
+
+<style>
+  .period-btn.active { border-color: #3b82f6; color: #2563eb; background: #eff6ff; }
+  @media print {
+    nav, .period-btn, button, #report-modal { display: none !important; }
+    body { background: white !important; }
+  }
+</style>
+
+<script>
+  let allIncidents = [], activePeriod = 7, reportChart = null, currentReport = null;
+
+  function setPeriod(days, btn) {
+    activePeriod = days;
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderReport();
+  }
+
+  function filterByPeriod(data) {
+    if (activePeriod === 0) return data;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - activePeriod);
+    return data.filter(i => new Date(i.created_at) >= cutoff);
+  }
+
+  const SEV_COLORS = { Critical: '#ef4444', High: '#f97316', Medium: '#eab308', Low: '#22c55e' };
+
+  function renderReport() {
+    const data = filterByPeriod(allIncidents);
+    document.getElementById('r-total').textContent = data.length;
+    document.getElementById('r-critical').textContent = data.filter(i => i.severity === 'Critical').length;
+    document.getElementById('r-resolved').textContent = data.filter(i => i.status === 'closed' || i.status === 'resolved').length;
+
+    const resolved = data.filter(i => i.resolution_time_minutes > 0);
+    const avgTime = resolved.length ? Math.round(resolved.reduce((s, i) => s + i.resolution_time_minutes, 0) / resolved.length) : null;
+    document.getElementById('r-avgtime').textContent = avgTime ? avgTime + ' min' : '—';
+
+    const catCount = {};
+    data.forEach(i => { const k = i.category || 'General'; catCount[k] = (catCount[k] || 0) + 1; });
+    const total = data.length || 1;
+    const catRates = document.getElementById('category-rates');
+    const cats = Object.entries(catCount).sort((a,b) => b[1]-a[1]);
+    const catColors = { Medical: '#10b981', Fire: '#ef4444', Security: '#3b82f6', Accident: '#f97316', Flood: '#06b6d4', General: '#64748b' };
+    catRates.innerHTML = cats.map(([cat, count]) => {
+      const pct = Math.round((count/total)*100);
+      const col = catColors[cat] || '#64748b';
+      return `<div>
+        <div class="flex justify-between mb-1">
+          <span class="text-sm font-bold text-slate-700">${cat}</span>
+          <span class="text-sm text-slate-500">${count} incidents · ${pct}%</span>
+        </div>
+        <div class="w-full bg-slate-100 rounded-full h-3">
+          <div class="h-3 rounded-full transition-all" style="width:${pct}%;background:${col}"></div>
+        </div>
+      </div>`;
+    }).join('');
+
+    const sevMap = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+    data.forEach(i => { const s = i.severity || 'Medium'; if (s in sevMap) sevMap[s]++; });
+    if (reportChart) reportChart.destroy();
+    reportChart = new Chart(document.getElementById('report-chart'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(sevMap),
+        datasets: [{ label: 'Count', data: Object.values(sevMap), backgroundColor: Object.values(SEV_COLORS), borderRadius: 8, borderSkipped: false }]
+      },
+      options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+
+    document.getElementById('table-count').textContent = `${data.length} incidents`;
+    const tbody = document.getElementById('report-table');
+    tbody.innerHTML = data.slice(0, 100).map(inc => {
+      const sev = inc.severity || 'Medium';
+      const color = SEV_COLORS[sev] || '#64748b';
+      const isResolved = inc.status === 'closed' || inc.status === 'resolved';
+      const resTime = inc.resolution_time_minutes ? `${inc.resolution_time_minutes} min` : '—';
+      return `<tr class="hover:bg-slate-50">
+        <td class="p-4 font-mono text-xs text-blue-600">${inc.id.slice(0,10).toUpperCase()}</td>
+        <td class="p-4"><span class="px-2 py-0.5 bg-slate-100 rounded text-xs">${inc.category || 'General'}</span></td>
+        <td class="p-4"><span class="text-xs font-bold" style="color:${color}">${sev}</span></td>
+        <td class="p-4 text-slate-700 text-xs">${inc.user_name || inc.user_id || '—'}</td>
+        <td class="p-4 text-slate-500 text-xs">${(inc.location_details || '—').slice(0,30)}</td>
+        <td class="p-4"><span class="text-xs font-bold px-2 py-0.5 rounded-full ${isResolved ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}">${isResolved ? '✓ Resolved' : inc.status || 'Active'}</span></td>
+        <td class="p-4 text-slate-500 text-xs">${resTime}</td>
+        <td class="p-4 text-slate-400 text-xs">${new Date(inc.created_at).toLocaleDateString('en-IN')}</td>
+        <td class="p-4">
+          <button onclick="viewReport('${inc.id}')" class="text-xs bg-purple-100 text-purple-700 font-bold px-3 py-1 rounded-full hover:bg-purple-200 transition flex items-center gap-1">
+            <i class="fa-solid fa-file-lines"></i> View
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function viewReport(incidentId) {
+    const res = await fetch('/api/incident/report/' + incidentId);
+    if (!res.ok) {
+      alert('No report available for this incident yet. Close/resolve the incident first.');
+      return;
+    }
+    const data = await res.json();
+    const r = data.report;
+    currentReport = { id: incidentId, data: r, generated_at: data.generated_at };
+
+    document.getElementById('report-modal-title').textContent = `Report: ${incidentId}`;
+    const safeIcon = r.step4_safe_confirmed ? `<span class="text-xs bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full">✓ Person Safe at ${r.safe_location || 'Safe Location'}</span>` : '';
+    const hospLine = r.hospital ? `<div class="flex justify-between py-2 border-b border-slate-50"><span class="text-xs text-slate-500">Hospital</span><span class="text-xs font-bold text-emerald-700">🏥 ${r.hospital}</span></div>` : '';
+    const stepsHtml = r.steps && r.steps.length ? `
+      <div class="mt-4">
+        <p class="text-xs text-slate-400 uppercase font-bold mb-2">Response Steps</p>
+        ${r.steps.map(s => `<div class="flex items-center gap-2 mb-1">
+          <span class="w-5 h-5 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs font-bold">${s.step_number}</span>
+          <span class="text-sm text-slate-700">${s.step_name}</span>
+          <span class="text-xs text-slate-400">${s.notes || ''}</span>
+          ${s.completed_at ? `<span class="text-xs text-slate-300 ml-auto">${new Date(s.completed_at).toLocaleTimeString('en-IN')}</span>` : ''}
+        </div>`).join('')}
+      </div>` : '';
+
+    document.getElementById('report-modal-body').innerHTML = `
+      <div class="space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <p class="font-mono text-sm text-blue-600">${r.incident_id}</p>
+            <p class="text-xs text-slate-400">Generated: ${new Date(data.generated_at).toLocaleString('en-IN')}</p>
+          </div>
+          ${safeIcon}
+        </div>
+        <div class="bg-slate-50 rounded-xl p-4 space-y-2">
+          <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-xs text-slate-500">Caller</span><span class="text-xs font-bold text-slate-800">${r.user} ${r.phone ? '· ' + r.phone : ''}</span></div>
+          <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-xs text-slate-500">SOS Type</span><span class="text-xs font-bold text-slate-800">${r.sos_type}</span></div>
+          <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-xs text-slate-500">Category</span><span class="text-xs font-bold text-slate-800">${r.category}</span></div>
+          <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-xs text-slate-500">Severity</span><span class="text-xs font-bold ${r.severity === 'Critical' ? 'text-red-600' : 'text-slate-800'}">${r.severity}</span></div>
+          <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-xs text-slate-500">Location</span><span class="text-xs font-bold text-slate-800 text-right max-w-[200px]">${r.location}</span></div>
+          ${hospLine}
+          <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-xs text-slate-500">Unit Dispatched</span><span class="text-xs font-bold text-slate-800">${r.assigned_unit || 'None'} ${r.assigned_unit_type ? '· ' + r.assigned_unit_type : ''}</span></div>
+          <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-xs text-slate-500">Relatives Alerted</span><span class="text-xs font-bold ${r.step2_relatives_alerted ? 'text-green-600' : 'text-slate-400'}">${r.step2_relatives_alerted ? 'Yes' : 'No'}</span></div>
+          <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-xs text-slate-500">Resolution Time</span><span class="text-xs font-bold text-slate-800">${r.resolution_time_minutes ? r.resolution_time_minutes + ' minutes' : 'Ongoing'}</span></div>
+          <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-xs text-slate-500">Safe Location</span><span class="text-xs font-bold text-slate-800">${r.safe_location || '—'}</span></div>
+          <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-xs text-slate-500">Duplicate Reports</span><span class="text-xs font-bold text-slate-800">${r.duplicate_reports || 0} additional reports</span></div>
+          <div class="flex justify-between py-2"><span class="text-xs text-slate-500">Started / Closed</span><span class="text-xs font-bold text-slate-800">${r.started ? new Date(r.started).toLocaleString('en-IN') : '—'} → ${r.resolved ? new Date(r.resolved).toLocaleString('en-IN') : 'Ongoing'}</span></div>
+        </div>
+        ${r.description ? `<div>
+          <p class="text-xs text-slate-400 uppercase font-bold mb-2">Description</p>
+          <p class="text-sm text-slate-700 bg-slate-50 rounded-xl p-4">${r.description}</p>
+        </div>` : ''}
+        ${stepsHtml}
+        ${r.followup_notes ? `<div>
+          <p class="text-xs text-slate-400 uppercase font-bold mb-2">Follow-up Notes</p>
+          <p class="text-sm text-slate-700 bg-blue-50 rounded-xl p-4">${r.followup_notes}</p>
+        </div>` : ''}
+      </div>`;
+
+    document.getElementById('report-modal').classList.remove('hidden');
+  }
+
+  function closeReportModal() {
+    document.getElementById('report-modal').classList.add('hidden');
+  }
+
+  function downloadCurrentReport() {
+    if (!currentReport) return;
+    const r = currentReport.data;
+    const lines = [
+      'GUARDIANSYNC INCIDENT REPORT',
+      '============================',
+      `Incident ID: ${r.incident_id}`,
+      `Generated: ${new Date(currentReport.generated_at).toLocaleString('en-IN')}`,
+      '',
+      'INCIDENT DETAILS',
+      `Caller: ${r.user} | Phone: ${r.phone}`,
+      `SOS Type: ${r.sos_type}`,
+      `Category: ${r.category} | Severity: ${r.severity}`,
+      `Location: ${r.location}`,
+      `Landmark: ${r.landmark || 'N/A'}`,
+      '',
+      'RESPONSE',
+      `Unit Dispatched: ${r.assigned_unit || 'None'} (${r.assigned_unit_type || ''})`,
+      `Hospital: ${r.hospital || 'N/A'}`,
+      `Contact: ${r.resource_contact || 'N/A'}`,
+      `Relatives Alerted: ${r.step2_relatives_alerted ? 'Yes' : 'No'}`,
+      `Safe Location: ${r.safe_location || 'N/A'}`,
+      `Resolution Time: ${r.resolution_time_minutes ? r.resolution_time_minutes + ' minutes' : 'N/A'}`,
+      '',
+      'TIMELINE',
+      `Started: ${r.started}`,
+      `Resolved: ${r.resolved || 'Ongoing'}`,
+      '',
+      'DESCRIPTION',
+      r.description || 'N/A',
+      '',
+      'FOLLOW-UP NOTES',
+      r.followup_notes || 'N/A',
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `GuardianSync_Report_${r.incident_id}.txt`; a.click();
+  }
+
+  function downloadCSV() {
+    const data = filterByPeriod(allIncidents);
+    const headers = ['ID','Category','Severity','User','Phone','Location','Status','Unit','Hospital','Resolution (min)','Date','Safe Location'];
+    const rows = data.map(inc => [
+      inc.id, inc.category||'General', inc.severity||'Medium',
+      inc.user_name||'Unknown', inc.phone||'',
+      `"${(inc.location_details||'').replace(/"/g,'""')}"`,
+      inc.status, inc.assigned_unit||'', inc.assigned_hospital||'',
+      inc.resolution_time_minutes||'',
+      new Date(inc.created_at).toLocaleDateString('en-IN'),
+      inc.safe_location||''
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `GuardianSync_Incidents_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  }
+
+  async function load() {
+    const res = await fetch('/api/admin/incidents');
+    allIncidents = await res.json();
+    renderReport();
+  }
+
+  document.getElementById('report-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeReportModal();
+  });
+
+  load();
+</script>
+{% endblock %}

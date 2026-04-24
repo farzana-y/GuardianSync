@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>GuardianSync | Citizen Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#dc2626">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    .user-sidebar { background: linear-gradient(180deg, #1c1917 0%, #292524 100%); }
+    .user-nav-active { background: rgba(220,38,38,0.15); border-left: 3px solid #ef4444; color: white; }
+    .sos-glow { box-shadow: 0 0 20px rgba(220,38,38,0.4); }
+  </style>
+  <!-- Viewport -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
+
+<!-- PWA install -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#dc2626">
+
+<!-- iOS specific -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GuardianSync">
+<link rel="apple-touch-icon" href="/static/icon.jpeg">
+
+<!-- Android/Chrome -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="GuardianSync">
+</head>
+<body class="bg-gray-100 flex min-h-screen">
+
+  <!-- User Sidebar — warm/dark red theme (distinct from admin blue/indigo) -->
+  <div id="sidebar" class="w-64 user-sidebar min-h-screen fixed top-0 text-white p-5 shadow-2xl flex flex-col z-40
+    fixed lg:sticky inset-y-0 left-0 transform -translate-x-full lg:translate-x-0 transition-transform duration-200">
+
+    <div class="mb-8">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-red-600  flex items-center justify-center sos-glow">
+            <i class="fa-solid fa-shield-halved text-white text-lg"></i>
+            <img src="/static/icon.jpeg" alt="GuardianSync Icon" class="ai-style-change-2">
+          </div>
+          <div>
+            <p class="text-white font-bold text-sm">GuardianSync</p>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-red-900/60 text-red-300 font-bold uppercase tracking-widest">Citizen</span>
+          </div>
+        </div>
+        <button onclick="closeSidebar()" class="lg:hidden text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="h-px bg-gradient-to-r from-red-500 to-transparent opacity-40"></div>
+    </div>
+
+    <!-- Emergency SOS button (prominent, top of nav) -->
+    <a href="/user/sos" id="sos-nav-btn" class="flex items-center gap-3 p-4 rounded-2xl bg-red-600 hover:bg-red-700 transition mb-5 sos-glow group" data-path="/user/sos">
+      <div class="w-9 h-9 bg-red-700 rounded-xl flex items-center justify-center group-hover:bg-red-800">
+        <i class="fa-solid fa-phone-volume text-white animate-pulse"></i>
+      </div>
+      <div>
+        <p class="font-bold text-white text-sm">Emergency SOS</p>
+        <p class="text-red-200 text-xs">Tap for immediate help</p>
+      </div>
+    </a>
+
+    <nav class="space-y-1 flex-1">
+      <p class="text-stone-500 text-xs font-bold mb-2 uppercase tracking-widest">Navigation</p>
+      <a href="/" class="nav-link flex items-center p-3 rounded-xl hover:bg-stone-700/50 transition text-stone-300 hover:text-white" data-path="/">
+        <i class="fa-solid fa-house mr-3 w-5 text-stone-400"></i> Dashboard
+      </a>
+      <a href="/user/profile" class="nav-link flex items-center p-3 rounded-xl hover:bg-stone-700/50 transition text-stone-300 hover:text-white" data-path="/user/profile">
+        <i class="fa-solid fa-id-card mr-3 w-5 text-blue-400"></i> Medical ID & Profile
+      </a>
+      <a href="/user/history" class="nav-link flex items-center p-3 rounded-xl hover:bg-stone-700/50 transition text-stone-300 hover:text-white" data-path="/user/history">
+        <i class="fa-solid fa-clock-rotate-left mr-3 w-5 text-amber-400"></i> My History
+      </a>
+    </nav>
+
+    <!-- Active SOS session indicator -->
+    <div id="active-sos-indicator" class="hidden mb-3 bg-red-900/40 border border-red-700/50 rounded-xl p-3">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+        <p class="text-red-300 text-xs font-bold">Active SOS Session</p>
+      </div>
+      <a href="/user/sos" class="block bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 px-3 rounded-lg text-center transition">Return to SOS</a>
+    </div>
+
+    <!-- User identity -->
+    <div class="pt-4 border-t border-stone-700/50 space-y-2">
+      {% if user %}
+      <div class="flex items-center gap-3 p-3 bg-stone-800/50 rounded-xl">
+        <div class="w-9 h-9 bg-red-600 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">
+          {{ user.name[0] | upper }}
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-white text-sm font-bold truncate">{{ user.name }}</p>
+          <p class="text-stone-400 text-xs truncate">{{ user.email }}</p>
+        </div>
+      </div>
+      <a href="/auth/logout/citizen" class="flex items-center p-2 rounded-lg hover:bg-red-900/30 text-stone-400 hover:text-red-400 transition text-sm">
+        <i class="fa-solid fa-right-from-bracket mr-3 w-5"></i> Sign Out
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Overlay for mobile sidebar -->
+  <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden" onclick="closeSidebar()"></div>
+
+  <div class="flex-1 flex flex-col min-h-screen">
+    <!-- Mobile top bar -->
+    <div class="lg:hidden bg-stone-900 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-20 shadow-lg">
+      <button onclick="openSidebar()" class="text-white"><i class="fa-solid fa-bars text-xl"></i></button>
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-shield-halved text-red-400"></i>
+        <span class="font-bold text-white text-sm">GuardianSync</span>
+      </div>
+      <a href="/user/sos" class="bg-red-600 text-white px-3 py-1.5 rounded-full text-xs font-bold animate-pulse sos-glow">
+        <i class="fa-solid fa-phone-volume mr-1"></i> SOS
+      </a>
+    </div>
+
+    <!-- Active SOS banner (shown on non-SOS pages when session is active) -->
+    <div id="sos-banner" class="hidden mx-4 mt-4 bg-red-600 text-white rounded-2xl px-5 py-3 flex items-center justify-between shadow-lg">
+      <div class="flex items-center gap-3">
+        <span class="w-2.5 h-2.5 bg-white rounded-full animate-ping"></span>
+        <span class="font-bold text-sm">Active SOS session in progress</span>
+      </div>
+      <a href="/user/sos" class="bg-white text-red-600 font-bold px-3 py-1 rounded-lg text-xs hover:bg-red-50 transition">Return</a>
+    </div>
+
+    <div class="flex-1 p-5 lg:p-8">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+
+<script>
+  const path = window.location.pathname;
+  document.querySelectorAll('.nav-link').forEach(a => {
+    if (a.getAttribute('data-path') === path) {
+      a.classList.add('user-nav-active');
+      a.classList.remove('text-stone-300');
+    }
+  });
+  // Highlight SOS button if on SOS page
+  if (path === '/user/sos') {
+    document.getElementById('sos-nav-btn')?.classList.add('bg-red-700');
+  }
+
+  function openSidebar() {
+    document.getElementById('sidebar').classList.remove('-translate-x-full');
+    document.getElementById('sidebar-overlay').classList.remove('hidden');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.add('-translate-x-full');
+    document.getElementById('sidebar-overlay').classList.add('hidden');
+  }
+
+  // Show active SOS banner on non-SOS pages
+  if (path !== '/user/sos' && sessionStorage.getItem('gs_active_session')) {
+    document.getElementById('sos-banner').classList.remove('hidden');
+    document.getElementById('sos-banner').classList.add('flex');
+    document.getElementById('active-sos-indicator')?.classList.remove('hidden');
+  }
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then(reg => console.log('SW registered:', reg.scope))
+        .catch(err => console.log('SW failed:', err));
+    });
+  }
+</script>
+</body>
+</html>

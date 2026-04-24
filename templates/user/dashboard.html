@@ -1,0 +1,161 @@
+{% extends "user/layout.html" %}
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+  <!-- Welcome Hero -->
+  <div class="bg-gradient-to-br from-red-600 to-rose-700 rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden">
+    <div class="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-10 translate-x-10"></div>
+    <div class="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-10 -translate-x-10"></div>
+    <div class="relative">
+      <p class="text-red-200 text-sm font-bold uppercase tracking-widest mb-1">Welcome back</p>
+      <h1 class="text-3xl font-bold mb-2">{{ user.name }}</h1>
+      <p class="text-red-100 text-sm mb-6">GuardianSync Citizen Portal — Your safety, our priority.</p>
+      <a href="/user/sos" id="sos-hero-btn" class="inline-flex items-center gap-3 bg-white text-red-600 px-8 py-4 rounded-2xl font-bold text-lg hover:bg-red-50 transition shadow-lg">
+        <i class="fa-solid fa-phone-volume animate-pulse"></i>
+        Emergency SOS
+      </a>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <a href="/user/sos" class="bg-white rounded-2xl p-5 text-center shadow-sm border border-slate-200 hover:border-red-300 hover:shadow-md transition group">
+      <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:bg-red-200 transition">
+        <i class="fa-solid fa-phone-volume text-red-600 text-xl"></i>
+      </div>
+      <p class="font-bold text-slate-800 text-sm">Emergency SOS</p>
+      <p class="text-xs text-slate-400 mt-1">Get help now</p>
+    </a>
+    <a href="/user/profile" class="bg-white rounded-2xl p-5 text-center shadow-sm border border-slate-200 hover:border-blue-300 hover:shadow-md transition group">
+      <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-200 transition">
+        <i class="fa-solid fa-id-card text-blue-600 text-xl"></i>
+      </div>
+      <p class="font-bold text-slate-800 text-sm">Medical ID</p>
+      <p class="text-xs text-slate-400 mt-1">View & update</p>
+    </a>
+    <a href="/user/history" class="bg-white rounded-2xl p-5 text-center shadow-sm border border-slate-200 hover:border-amber-300 hover:shadow-md transition group">
+      <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:bg-amber-200 transition">
+        <i class="fa-solid fa-clock-rotate-left text-amber-600 text-xl"></i>
+      </div>
+      <p class="font-bold text-slate-800 text-sm">History</p>
+      <p class="text-xs text-slate-400 mt-1">Past incidents</p>
+    </a>
+    <div class="bg-white rounded-2xl p-5 text-center shadow-sm border border-slate-200">
+      <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+        <i class="fa-solid fa-shield-halved text-green-600 text-xl"></i>
+      </div>
+      <p class="font-bold text-slate-800 text-sm">Protected</p>
+      <p class="text-xs text-green-500 mt-1 font-bold">● Active</p>
+    </div>
+  </div>
+
+  <!-- Emergency Numbers -->
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+    <h2 class="font-bold text-slate-800 mb-4 flex items-center gap-2">
+      <i class="fa-solid fa-phone text-red-500"></i> Emergency Contacts
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <a href="tel:108" class="flex items-center gap-4 bg-emerald-50 border border-emerald-200 rounded-xl p-4 hover:bg-emerald-100 transition">
+        <div class="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center text-white font-bold text-xl">🚑</div>
+        <div><p class="font-bold text-emerald-800">Ambulance</p><p class="text-2xl font-black text-emerald-600">108</p></div>
+      </a>
+      <a href="tel:101" class="flex items-center gap-4 bg-red-50 border border-red-200 rounded-xl p-4 hover:bg-red-100 transition">
+        <div class="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center text-white font-bold text-xl">🚒</div>
+        <div><p class="font-bold text-red-800">Fire</p><p class="text-2xl font-black text-red-600">101</p></div>
+      </a>
+      <a href="tel:112" class="flex items-center gap-4 bg-blue-50 border border-blue-200 rounded-xl p-4 hover:bg-blue-100 transition">
+        <div class="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl">🚔</div>
+        <div><p class="font-bold text-blue-800">Police</p><p class="text-2xl font-black text-blue-600">112</p></div>
+      </a>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <div class="bg-slate-900 text-white rounded-2xl p-6">
+    <h2 class="font-bold text-lg mb-4">How GuardianSync Works</h2>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="text-center">
+        <div class="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center font-bold mx-auto mb-2">1</div>
+        <p class="text-sm font-bold text-white">Press SOS</p>
+        <p class="text-xs text-slate-400 mt-1">Chat or speak about your emergency</p>
+      </div>
+      <div class="text-center">
+        <div class="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center font-bold mx-auto mb-2">2</div>
+        <p class="text-sm font-bold text-white">AI Triages</p>
+        <p class="text-xs text-slate-400 mt-1">Coordinates details, guides you</p>
+      </div>
+      <div class="text-center">
+        <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center font-bold mx-auto mb-2">3</div>
+        <p class="text-sm font-bold text-white">Dispatch</p>
+        <p class="text-xs text-slate-400 mt-1">Admin sends nearest unit to you</p>
+      </div>
+      <div class="text-center">
+        <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center font-bold mx-auto mb-2">4</div>
+        <p class="text-sm font-bold text-white">Resolved</p>
+        <p class="text-xs text-slate-400 mt-1">Full report generated & archived</p>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Install banner — shows only when browser fires beforeinstallprompt -->
+<div id="install-banner" class="hidden bg-red-600 text-white rounded-2xl p-4 flex items-center gap-4 shadow-lg">
+  <i class="fa-solid fa-mobile-screen text-2xl"></i>
+  <div class="flex-1">
+    <p class="font-bold">Install GuardianSync</p>
+    <p class="text-sm text-red-200">Add to your home screen for instant SOS access</p>
+  </div>
+  <button id="install-btn" class="bg-white text-red-600 font-bold px-4 py-2 rounded-xl text-sm">Install</button>
+  <button onclick="document.getElementById('install-banner').classList.add('hidden')" class="text-red-200 hover:text-white">✕</button>
+</div>
+
+<script>
+  let deferredPrompt;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('install-banner').classList.remove('hidden');
+  });
+  document.getElementById('install-btn')?.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    document.getElementById('install-banner').classList.add('hidden');
+  });
+</script>
+<script>
+  // If there's an active session, link SOS button back to same incident
+  const lastId = localStorage.getItem('gs_last_incident_id');
+  if (lastId) {
+    const sessionKey = 'gs_chat_' + lastId;
+    const savedSession = sessionStorage.getItem(sessionKey);
+    if (savedSession) {
+      try {
+        const s = JSON.parse(savedSession);
+        if (s.chatHistory && s.chatHistory.length > 1) {
+          const url = '/user/sos?incident_id=' + lastId;
+          document.querySelectorAll('a[href="/user/sos"]').forEach(a => a.href = url);
+          const btn = document.getElementById('sos-hero-btn');
+          if (btn) btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Resume Active SOS';
+        }
+      } catch(e) {}
+    }
+  }
+
+  // Listen for admin closing an incident → clear the resume button
+  try {
+    const bc = new BroadcastChannel('gs_incident_events');
+    bc.onmessage = (e) => {
+      if (e.data && e.data.type === 'incident_closed') {
+        localStorage.removeItem('gs_last_incident_id');
+        const btn = document.getElementById('sos-hero-btn');
+        if (btn) {
+          btn.href = '/user/sos';
+          btn.innerHTML = '<i class="fa-solid fa-phone-volume animate-pulse"></i> Emergency SOS';
+        }
+        document.querySelectorAll('a[href*="incident_id="]').forEach(a => a.href = '/user/sos');
+      }
+    };
+  } catch(e) {}
+</script>
+{% endblock %}

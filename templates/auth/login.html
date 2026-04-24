@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GuardianSync | Sign In</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: linear-gradient(135deg, #1c1917 0%, #292524 50%, #1c1917 100%); }
+    .portal-card { transition: all 0.3s; }
+    .portal-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+  <div id="portal-selector" class="w-full max-w-2xl">
+    <div class="text-center mb-10">
+      <div class="inline-flex items-center justify-center w-20 h-20 bg-red-600 rounded-2xl mb-5" style="box-shadow:0 0 30px rgba(220,38,38,0.4)">
+        <i class="fa-solid fa-shield-halved text-white text-3xl"></i>
+      </div>
+      <h1 class="text-4xl font-bold text-white">GuardianSync</h1>
+      <p class="text-stone-400 mt-2">Emergency Response Network &mdash; Select your portal</p>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div onclick="showPortal('citizen')" class="portal-card bg-white rounded-2xl p-6 cursor-pointer border-2 border-transparent hover:border-red-400 shadow-xl text-center">
+        <div class="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <i class="fa-solid fa-user text-red-600 text-2xl"></i>
+        </div>
+        <h3 class="font-bold text-slate-800 text-lg mb-1">Citizen</h3>
+        <p class="text-slate-500 text-xs mb-4">SOS, Medical ID, incident history</p>
+        <div class="bg-red-600 text-white text-xs font-bold py-2 px-4 rounded-xl">Citizen Portal →</div>
+      </div>
+      <div onclick="showPortal('admin')" class="portal-card bg-white rounded-2xl p-6 cursor-pointer border-2 border-transparent hover:border-indigo-400 shadow-xl text-center">
+        <div class="w-14 h-14 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <i class="fa-solid fa-shield-halved text-indigo-600 text-2xl"></i>
+        </div>
+        <h3 class="font-bold text-slate-800 text-lg mb-1">Admin</h3>
+        <p class="text-slate-500 text-xs mb-4">Command center, dispatch, analytics</p>
+        <div class="bg-indigo-700 text-white text-xs font-bold py-2 px-4 rounded-xl">Admin Console →</div>
+      </div>
+      <div onclick="window.location='/responder/login'" class="portal-card bg-white rounded-2xl p-6 cursor-pointer border-2 border-transparent hover:border-cyan-400 shadow-xl text-center">
+        <div class="w-14 h-14 bg-cyan-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <i class="fa-solid fa-truck-medical text-cyan-600 text-2xl"></i>
+        </div>
+        <h3 class="font-bold text-slate-800 text-lg mb-1">Responder</h3>
+        <p class="text-slate-500 text-xs mb-4">Field crew: dispatch, status updates</p>
+        <div class="bg-cyan-600 text-white text-xs font-bold py-2 px-4 rounded-xl">Field Portal →</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="portal-citizen" class="w-full max-w-md hidden">
+    <div class="text-center mb-6">
+      <button onclick="showPortalSelector()" class="text-stone-400 hover:text-white text-sm mb-4 inline-flex items-center gap-2">
+        <i class="fa-solid fa-arrow-left"></i> Back to Portals
+      </button>
+      <div class="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-2xl mb-3" style="box-shadow:0 0 20px rgba(220,38,38,0.4)">
+        <i class="fa-solid fa-user text-white text-2xl"></i>
+      </div>
+      <h2 class="text-2xl font-bold text-white">Citizen Portal</h2>
+      <p class="text-stone-400 text-sm">Emergency SOS &amp; Medical ID</p>
+    </div>
+    <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
+      <div class="flex border-b border-slate-100">
+        <button id="tab-login" onclick="showTab('login')" class="flex-1 py-4 text-sm font-bold text-slate-800 border-b-2 border-red-500 transition">Sign In</button>
+        <button id="tab-register" onclick="showTab('register')" class="flex-1 py-4 text-sm font-bold text-slate-400 border-b-2 border-transparent transition hover:text-slate-600">Create Account</button>
+      </div>
+      {% if error %}<div class="mx-6 mt-4 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm flex items-center gap-2"><i class="fa-solid fa-circle-exclamation"></i> {{ error }}</div>{% endif %}
+      {% if success %}<div class="mx-6 mt-4 bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm flex items-center gap-2"><i class="fa-solid fa-circle-check"></i> {{ success }}</div>{% endif %}
+      <div id="form-login" class="p-6 space-y-4">
+        <form method="POST" action="/auth/login">
+          <div class="space-y-4">
+            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label>
+              <input type="email" name="email" required placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500 text-sm"></div>
+            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+              <input type="password" name="password" required placeholder="Your password" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500 text-sm"></div>
+            <button type="submit" class="w-full bg-red-600 text-white py-3 rounded-xl font-bold hover:bg-red-700 transition"><i class="fa-solid fa-right-to-bracket mr-2"></i>Sign In</button>
+          </div>
+        </form>
+        <p class="text-center text-xs text-slate-400">Demo: farzana@guardiansync.in / demo123</p>
+      </div>
+      <div id="form-register" class="p-6 space-y-4 hidden">
+        <form method="POST" action="/auth/register">
+          <div class="space-y-4">
+            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
+              <input type="text" name="name" required placeholder="Your full name" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500 text-sm"></div>
+            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label>
+              <input type="email" name="email" required placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500 text-sm"></div>
+            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Phone</label>
+              <input type="tel" name="phone" placeholder="+91 XXXXXXXXXX" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500 text-sm"></div>
+            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+              <input type="password" name="password" required placeholder="Create a strong password" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500 text-sm"></div>
+            <button type="submit" class="w-full bg-red-600 text-white py-3 rounded-xl font-bold hover:bg-red-700 transition"><i class="fa-solid fa-user-plus mr-2"></i>Create Account</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="portal-admin" class="w-full max-w-md hidden">
+    <div class="text-center mb-6">
+      <button onclick="showPortalSelector()" class="text-stone-400 hover:text-white text-sm mb-4 inline-flex items-center gap-2">
+        <i class="fa-solid fa-arrow-left"></i> Back to Portals
+      </button>
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-3" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);box-shadow:0 0 30px rgba(99,102,241,0.4)">
+        <i class="fa-solid fa-shield-halved text-white text-2xl"></i>
+      </div>
+      <h2 class="text-2xl font-bold text-white">Admin Command Console</h2>
+      <p class="text-indigo-300 text-sm">Authorized Personnel Only</p>
+    </div>
+    <div class="bg-slate-900 border border-indigo-800 rounded-3xl shadow-2xl overflow-hidden">
+      <div class="bg-indigo-900/50 px-6 py-4 border-b border-indigo-800 flex items-center gap-3">
+        <i class="fa-solid fa-lock text-indigo-400"></i>
+        <p class="text-indigo-200 text-sm font-bold">Secure Admin Access</p>
+      </div>
+      {% if error %}<div class="mx-6 mt-4 bg-red-900/50 border border-red-700 text-red-300 rounded-xl px-4 py-3 text-sm"><i class="fa-solid fa-circle-exclamation mr-2"></i>{{ error }}</div>{% endif %}
+      <div class="p-6 space-y-4">
+        <form method="POST" action="/auth/login">
+          <div class="space-y-4">
+            <div><label class="block text-xs font-bold text-indigo-400 uppercase mb-1">Admin Email</label>
+              <input type="email" name="email" required placeholder="admin@guardiansync.in" class="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-white placeholder-slate-500"></div>
+            <div><label class="block text-xs font-bold text-indigo-400 uppercase mb-1">Admin Password</label>
+              <input type="password" name="password" required placeholder="••••••••" class="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-white"></div>
+            <button type="submit" class="w-full py-3 rounded-xl font-bold text-white transition" style="background:linear-gradient(135deg,#7c3aed,#4f46e5)">
+              <i class="fa-solid fa-terminal mr-2"></i>Access Command Console
+            </button>
+          </div>
+        </form>
+        <p class="text-center text-xs text-slate-600">admin@guardiansync.in / admin123</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showPortalSelector() {
+      ['portal-selector','portal-citizen','portal-admin'].forEach(id =>
+        document.getElementById(id).classList.toggle('hidden', id !== 'portal-selector'));
+    }
+    function showPortal(name) {
+      document.getElementById('portal-selector').classList.add('hidden');
+      document.getElementById('portal-citizen').classList.toggle('hidden', name !== 'citizen');
+      document.getElementById('portal-admin').classList.toggle('hidden', name !== 'admin');
+    }
+    function showTab(tab) {
+      document.getElementById('form-login').classList.toggle('hidden', tab !== 'login');
+      document.getElementById('form-register').classList.toggle('hidden', tab !== 'register');
+      document.getElementById('tab-login').className = 'flex-1 py-4 text-sm font-bold transition border-b-2 ' + (tab==='login' ? 'text-slate-800 border-red-500' : 'text-slate-400 border-transparent hover:text-slate-600');
+      document.getElementById('tab-register').className = 'flex-1 py-4 text-sm font-bold transition border-b-2 ' + (tab==='register' ? 'text-slate-800 border-red-500' : 'text-slate-400 border-transparent hover:text-slate-600');
+    }
+    {% if show_register %}showPortal('citizen'); showTab('register');
+    {% elif error %}showPortal('citizen');{% endif %}
+  </script>
+</body>
+</html>

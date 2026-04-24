@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GuardianSync | Field Responder</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .card { background: white; border-radius: 1rem; box-shadow: 0 4px 24px rgba(0,0,0,0.12); }
+    .status-btn { transition: all 0.2s; }
+    .status-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
+    .pulse-dot { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* Theme per unit type */
+    .theme-ambulance { --accent: #0891b2; --accent-light: #e0f2fe; --accent-border: #bae6fd; }
+    .theme-fire      { --accent: #dc2626; --accent-light: #fef2f2; --accent-border: #fecaca; }
+    .theme-police    { --accent: #4f46e5; --accent-light: #eef2ff; --accent-border: #c7d2fe; }
+
+    .topbar-ambulance { background: linear-gradient(135deg, #0c4a6e, #0e7490); }
+    .topbar-fire      { background: linear-gradient(135deg, #7f1d1d, #b91c1c); }
+    .topbar-police    { background: linear-gradient(135deg, #1e1b4b, #3730a3); }
+
+    .icon-ambulance { background: #0891b2; }
+    .icon-fire      { background: #ef4444; }
+    .icon-police    { background: #6366f1; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100">
+
+  {% set unit_type = fleet.unit_type if fleet else 'Ambulance' %}
+  {% set is_ambulance = unit_type == 'Ambulance' %}
+  {% set is_fire = unit_type == 'Fire Truck' %}
+  {% set is_police = unit_type == 'Police' %}
+  {% set theme = 'ambulance' if is_ambulance else ('fire' if is_fire else 'police') %}
+
+  <!-- Top Bar -->
+  <div class="topbar-{{ theme }} text-white px-4 py-3 flex items-center justify-between shadow-lg">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 icon-{{ theme }} rounded-xl flex items-center justify-center">
+        {% if is_ambulance %}<i class="fa-solid fa-truck-medical text-lg"></i>
+        {% elif is_fire %}<i class="fa-solid fa-fire-extinguisher text-lg"></i>
+        {% else %}<i class="fa-solid fa-shield-halved text-lg"></i>{% endif %}
+      </div>
+      <div>
+        <p class="font-bold text-sm">{{ user.name }}</p>
+        <p class="text-white/70 text-xs">
+          {% if fleet %}{{ fleet.unit_id }} · {{ fleet.unit_type }}{% else %}No Unit Assigned{% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="live-status" class="text-xs bg-white/20 px-3 py-1 rounded-full font-bold">
+        {% if fleet %}{{ fleet.current_status }}{% else %}Standby{% endif %}
+      </span>
+      <a href="/auth/logout/responder" class="text-white/60 hover:text-white text-sm">
+        <i class="fa-solid fa-right-from-bracket"></i>
+      </a>
+    </div>
+  </div>
+
+  <div class="max-w-2xl mx-auto p-4 space-y-4">
+
+    {% if not fleet %}
+    <div class="card p-6 text-center mt-4">
+      <i class="fa-solid fa-triangle-exclamation text-4xl text-amber-500 mb-3"></i>
+      <h2 class="text-lg font-bold text-slate-800 mb-2">No Unit Linked</h2>
+      <p class="text-sm text-slate-500">Your account is not linked to any fleet unit. Contact your administrator.</p>
+    </div>
+
+    {% else %}
+
+    <!-- Active Incident Panel -->
+    {% if active_incident %}
+    <div class="card overflow-hidden border-2 border-red-400 mt-2">
+      <div class="bg-red-600 text-white px-5 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2 font-bold">
+          <span class="pulse-dot w-2 h-2 bg-white rounded-full inline-block"></span>
+          Active Dispatch
+        </div>
+        <span class="text-sm font-mono bg-red-700 px-3 py-1 rounded-full">{{ active_incident.id }}</span>
+      </div>
+      <div class="p-5 space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-xs text-slate-400 uppercase font-bold mb-1">
+              {% if is_police %}Reporting Person{% else %}Patient / Reporter{% endif %}
+            </p>
+            <p class="font-bold text-slate-800">{{ active_incident.user_name or 'Unknown' }}</p>
+            <p class="text-sm text-slate-500">{{ active_incident.phone or '—' }}</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 uppercase font-bold mb-1">Emergency Type</p>
+            <p class="font-bold text-slate-800">{{ active_incident.category or '—' }}</p>
+            <span class="text-xs font-bold px-2 py-1 rounded-full
+              {% if active_incident.severity == 'Critical' %}bg-red-100 text-red-700
+              {% elif active_incident.severity == 'High' %}bg-orange-100 text-orange-700
+              {% else %}bg-yellow-100 text-yellow-700{% endif %}">
+              {{ active_incident.severity or 'Medium' }}
+            </span>
+          </div>
+          <div class="col-span-2">
+            <p class="text-xs text-slate-400 uppercase font-bold mb-1">Location</p>
+            <p class="font-bold text-slate-800">{{ active_incident.location_details or active_incident.landmark or 'See map below' }}</p>
+            {% if active_incident.lat and active_incident.lng %}
+            <a href="https://maps.google.com/maps?q={{ active_incident.lat }},{{ active_incident.lng }}"
+              target="_blank"
+              class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-1 font-bold">
+              <i class="fa-solid fa-map-location-dot"></i> Open in Google Maps
+            </a>
+            {% endif %}
+          </div>
+          {% if active_incident.description %}
+          <div class="col-span-2 bg-slate-50 rounded-xl p-3">
+            <p class="text-xs text-slate-400 uppercase font-bold mb-1">Description</p>
+            <p class="text-sm text-slate-700">{{ active_incident.description }}</p>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Ambulance: show destination hospital -->
+        {% if is_ambulance and fleet.hospital_name %}
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
+          <i class="fa-solid fa-hospital text-emerald-600 text-xl"></i>
+          <div>
+            <p class="text-xs font-bold text-emerald-700 uppercase">Destination Hospital</p>
+            <p class="font-bold text-emerald-800">{{ fleet.hospital_name }}</p>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Fire Truck: show evacuation note -->
+        {% if is_fire %}
+        <div class="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-3">
+          <i class="fa-solid fa-fire text-red-600 text-xl"></i>
+          <div>
+            <p class="text-xs font-bold text-red-700 uppercase">Fire Response Protocol</p>
+            <p class="text-sm text-red-800">Secure perimeter · Evacuate area · Suppress fire</p>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Police: show station -->
+        {% if is_police %}
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex items-center gap-3">
+          <i class="fa-solid fa-shield-halved text-indigo-600 text-xl"></i>
+          <div>
+            <p class="text-xs font-bold text-indigo-700 uppercase">Reporting Station</p>
+            <p class="font-bold text-indigo-800">{{ fleet.station_name or 'Base Station' }}</p>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Map -->
+        {% if active_incident.lat and active_incident.lng %}
+        <div id="field-map" style="height:200px; border-radius:12px; overflow:hidden;"></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Status Update Buttons — differ by unit type -->
+    <div class="card p-5 space-y-3">
+      <h3 class="font-bold text-slate-800 flex items-center gap-2">
+        <i class="fa-solid fa-signal text-blue-600"></i> Update Field Status
+        <span class="text-xs text-slate-400 font-normal ml-auto">Admin notified in real-time</span>
+      </h3>
+
+      {% if is_ambulance %}
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="updateStatus('reached_location')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700">
+          <i class="fa-solid fa-map-pin text-2xl"></i>
+          <span class="text-xs font-bold text-center">Reached Scene</span>
+        </button>
+        <button onclick="updateStatus('picked_up')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700">
+          <i class="fa-solid fa-person-walking-arrow-right text-2xl"></i>
+          <span class="text-xs font-bold text-center">Patient On Board</span>
+        </button>
+        <button onclick="updateStatus('going_to_hospital')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700">
+          <i class="fa-solid fa-hospital text-2xl"></i>
+          <span class="text-xs font-bold text-center">En Route to Hospital</span>
+        </button>
+        <button onclick="updateStatus('completed')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-green-200 bg-green-50 hover:bg-green-100 text-green-700">
+          <i class="fa-solid fa-circle-check text-2xl"></i>
+          <span class="text-xs font-bold text-center">Patient Admitted</span>
+        </button>
+      </div>
+
+      {% elif is_fire %}
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="updateStatus('reached_location')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700">
+          <i class="fa-solid fa-map-pin text-2xl"></i>
+          <span class="text-xs font-bold text-center">Reached Scene</span>
+        </button>
+        <button onclick="updateStatus('area_secured')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-700">
+          <i class="fa-solid fa-tape text-2xl"></i>
+          <span class="text-xs font-bold text-center">Area Secured</span>
+        </button>
+        <button onclick="updateStatus('fire_controlled')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700">
+          <i class="fa-solid fa-fire-extinguisher text-2xl"></i>
+          <span class="text-xs font-bold text-center">Fire Controlled</span>
+        </button>
+        <button onclick="updateStatus('completed')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-green-200 bg-green-50 hover:bg-green-100 text-green-700">
+          <i class="fa-solid fa-circle-check text-2xl"></i>
+          <span class="text-xs font-bold text-center">Scene Cleared</span>
+        </button>
+      </div>
+
+      {% else %}{# Police #}
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="updateStatus('reached_location')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700">
+          <i class="fa-solid fa-map-pin text-2xl"></i>
+          <span class="text-xs font-bold text-center">Reached Scene</span>
+        </button>
+        <button onclick="updateStatus('situation_assessed')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700">
+          <i class="fa-solid fa-magnifying-glass text-2xl"></i>
+          <span class="text-xs font-bold text-center">Situation Assessed</span>
+        </button>
+        <button onclick="updateStatus('person_in_custody_or_safe')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700">
+          <i class="fa-solid fa-handcuffs text-2xl"></i>
+          <span class="text-xs font-bold text-center">Person Secured / Safe</span>
+        </button>
+        <button onclick="updateStatus('completed')"
+          class="status-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-green-200 bg-green-50 hover:bg-green-100 text-green-700">
+          <i class="fa-solid fa-circle-check text-2xl"></i>
+          <span class="text-xs font-bold text-center">Case Closed</span>
+        </button>
+      </div>
+      {% endif %}
+
+      <div id="status-feedback" class="hidden bg-green-50 border border-green-200 text-green-700 rounded-xl p-3 text-sm text-center font-bold"></div>
+    </div>
+
+    {% else %}
+    <!-- Standby -->
+    <div class="card p-6 text-center mt-2">
+      <i class="fa-solid fa-circle-check text-5xl text-green-500 mb-3"></i>
+      <h2 class="text-lg font-bold text-slate-800 mb-1">No Active Dispatch</h2>
+      <p class="text-sm text-slate-500">You're on standby. Waiting for a dispatch request from command.</p>
+      <div class="mt-4 inline-flex items-center gap-2 text-xs text-green-600 bg-green-50 px-4 py-2 rounded-full font-bold border border-green-200">
+        <span class="pulse-dot w-2 h-2 bg-green-500 rounded-full"></span>
+        {{ fleet.current_status or 'Standby' }}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Activity Timeline -->
+    <div class="card p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2">
+        <i class="fa-solid fa-timeline text-blue-600"></i> Activity Log
+      </h3>
+      <div id="timeline-items" class="space-y-2 text-sm">
+        <p class="text-slate-400 italic text-xs">Loading...</p>
+      </div>
+    </div>
+
+    <!-- Unit Info Card -->
+    <div class="card p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2">
+        <i class="fa-solid fa-id-badge text-slate-500"></i> My Unit
+      </h3>
+      <div class="grid grid-cols-2 gap-3 text-sm">
+        <div class="bg-slate-50 rounded-xl p-3">
+          <p class="text-xs text-slate-400 uppercase font-bold mb-1">Unit ID</p>
+          <p class="font-bold font-mono text-slate-800">{{ fleet.unit_id }}</p>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-3">
+          <p class="text-xs text-slate-400 uppercase font-bold mb-1">Type</p>
+          <p class="font-bold text-slate-800">
+            {% if is_ambulance %}🚑 Ambulance
+            {% elif is_fire %}🚒 Fire Truck
+            {% else %}🚔 Police{% endif %}
+          </p>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-3">
+          <p class="text-xs text-slate-400 uppercase font-bold mb-1">Station</p>
+          <p class="font-bold text-slate-800">{{ fleet.station_name or '—' }}</p>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-3">
+          <p class="text-xs text-slate-400 uppercase font-bold mb-1">City</p>
+          <p class="font-bold text-slate-800">{{ fleet.city or '—' }}</p>
+        </div>
+        {% if is_ambulance and fleet.hospital_name %}
+        <div class="col-span-2 bg-emerald-50 rounded-xl p-3">
+          <p class="text-xs text-emerald-600 uppercase font-bold mb-1">🏥 Associated Hospital</p>
+          <p class="font-bold text-emerald-800">{{ fleet.hospital_name }}</p>
+        </div>
+        {% endif %}
+        {% if is_police %}
+        <div class="col-span-2 bg-indigo-50 rounded-xl p-3">
+          <p class="text-xs text-indigo-600 uppercase font-bold mb-1">🚔 Jurisdiction</p>
+          <p class="font-bold text-indigo-800">{{ fleet.station_name or 'Police Station' }}</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% endif %}{# end fleet check #}
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const unitId = "{{ fleet.unit_id if fleet else '' }}";
+    const incidentId = "{{ active_incident.id if active_incident else '' }}";
+    const incLat = {{ active_incident.lat if active_incident and active_incident.lat else 'null' }};
+    const incLng = {{ active_incident.lng if active_incident and active_incident.lng else 'null' }};
+    const unitType = "{{ fleet.unit_type if fleet else 'Ambulance' }}";
+
+    // Unit-type-aware status labels
+    const STATUS_LABELS = {
+      // Ambulance
+      reached_location:           'Reached Scene',
+      picked_up:                  'Patient On Board',
+      going_to_hospital:          'En Route to Hospital',
+      completed:                  'Mission Complete',
+      // Fire
+      area_secured:               'Area Secured',
+      fire_controlled:            'Fire Controlled',
+      // Police
+      situation_assessed:         'Situation Assessed',
+      person_in_custody_or_safe:  'Person Secured / Safe',
+    };
+
+    // Init map
+    if (incLat && incLng && document.getElementById('field-map')) {
+      const map = L.map('field-map').setView([incLat, incLng], 16);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+      const color = unitType === 'Ambulance' ? '#0891b2' : unitType === 'Fire Truck' ? '#dc2626' : '#4f46e5';
+      L.circleMarker([incLat, incLng], { radius: 12, fillColor: '#ef4444', color: '#fff', fillOpacity: 0.9, weight: 3 })
+        .addTo(map).bindPopup('<b>Incident Location</b>').openPopup();
+    }
+
+    async function updateStatus(statusKey) {
+      if (!unitId || !incidentId) return;
+      const label = STATUS_LABELS[statusKey] || statusKey;
+      const fb = document.getElementById('status-feedback');
+      fb.textContent = 'Updating...';
+      fb.classList.remove('hidden');
+      try {
+        const res = await fetch('/api/responder/update-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ unit_id: unitId, incident_id: incidentId, unit_status: statusKey, notes: label })
+        });
+        const data = await res.json();
+        const friendly = data.friendly_status || label;
+        fb.textContent = '✅ Status updated: ' + friendly;
+        document.getElementById('live-status').textContent = friendly;
+        loadTimeline();
+        if (statusKey === 'completed') {
+          setTimeout(() => location.reload(), 2000);
+        }
+      } catch(e) {
+        fb.textContent = '❌ Failed to update. Try again.';
+      }
+    }
+
+    async function loadTimeline() {
+      if (!incidentId) {
+        document.getElementById('timeline-items').innerHTML =
+          '<p class="text-slate-400 italic text-xs">No active dispatch.</p>';
+        return;
+      }
+      try {
+        const res = await fetch('/api/responder/my-incident');
+        const data = await res.json();
+        const container = document.getElementById('timeline-items');
+        if (!data.steps || !data.steps.length) {
+          container.innerHTML = '<p class="text-slate-400 italic text-xs">No activity logged yet.</p>';
+          return;
+        }
+        container.innerHTML = data.steps.map(s => `
+          <div class="flex items-start gap-3">
+            <div class="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <i class="fa-solid fa-check text-blue-600 text-xs"></i>
+            </div>
+            <div>
+              <p class="font-bold text-slate-800 text-xs">${s.step_name}</p>
+              ${s.notes ? `<p class="text-slate-500 text-xs">${s.notes}</p>` : ''}
+              <p class="text-slate-300 text-xs">${s.completed_at ? new Date(s.completed_at).toLocaleString() : ''}</p>
+            </div>
+          </div>`).join('');
+      } catch(e) {}
+    }
+
+    // Update STATUS_MAP in API to handle new fire/police statuses
+    loadTimeline();
+    setInterval(loadTimeline, 15000);
+
+    // Auto-refresh when dispatched
+    setInterval(async () => {
+      if (!incidentId) {
+        try {
+          const res = await fetch('/api/responder/my-incident');
+          const data = await res.json();
+          if (data.incident) location.reload();
+        } catch(e) {}
+      }
+    }, 10000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+{% extends "admin/layout.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+  <div>
+    <h1 class="text-3xl font-bold text-slate-800">System Logs</h1>
+    <p class="text-slate-500">All incident activity, status changes, and resource allocations.</p>
+  </div>
+
+  <div class="flex gap-3 flex-wrap">
+    <input id="log-search" type="text" placeholder="Search logs..." oninput="filterLogs()"
+      class="border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white w-64">
+    <select id="log-status-filter" onchange="filterLogs()"
+      class="border border-slate-200 rounded-xl px-4 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500">
+      <option value="">All Statuses</option>
+      <option value="RESOURCE_ALLOCATED">Dispatched</option>
+      <option value="collecting">Collecting Info</option>
+      <option value="voice_active">Voice Active</option>
+      <option value="closed">Closed</option>
+      <option value="resolved">Resolved</option>
+    </select>
+    <div class="ml-auto flex items-center gap-2">
+      <span class="w-2 h-2 bg-green-400 rounded-full animate-ping"></span>
+      <span class="text-xs text-green-600 font-bold">Auto-refreshing</span>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <table class="w-full text-left">
+      <thead class="bg-slate-900 text-white text-xs uppercase">
+        <tr>
+          <th class="p-4">Time</th>
+          <th class="p-4">Incident ID</th>
+          <th class="p-4">User</th>
+          <th class="p-4">Category</th>
+          <th class="p-4">Severity</th>
+          <th class="p-4">Status</th>
+          <th class="p-4">Unit Assigned</th>
+          <th class="p-4">Location</th>
+        </tr>
+      </thead>
+      <tbody id="log-table" class="divide-y divide-slate-100 text-sm font-mono"></tbody>
+    </table>
+  </div>
+  <p class="text-xs text-slate-400 text-right" id="log-count">0 log entries</p>
+</div>
+
+<script>
+  let allLogs = [];
+
+  function statusColor(s) {
+    if (s === 'RESOURCE_ALLOCATED') return 'text-orange-600 bg-orange-50';
+    if (s === 'closed' || s === 'resolved') return 'text-green-600 bg-green-50';
+    if (s === 'voice_active') return 'text-blue-600 bg-blue-50';
+    return 'text-slate-600 bg-slate-50';
+  }
+
+  function renderLogs(data) {
+    const tbody = document.getElementById('log-table');
+    document.getElementById('log-count').textContent = `${data.length} log entries`;
+    tbody.innerHTML = data.map(inc => `
+      <tr class="hover:bg-slate-50 transition">
+        <td class="p-4 text-slate-400 text-xs">${new Date(inc.updated_at || inc.created_at).toLocaleString('en-IN')}</td>
+        <td class="p-4 text-blue-600 text-xs">${inc.id.slice(0,12).toUpperCase()}</td>
+        <td class="p-4 text-slate-700 font-sans">${inc.user_name || inc.user_id || '—'}</td>
+        <td class="p-4 font-sans"><span class="px-2 py-0.5 bg-slate-100 rounded text-xs">${inc.category || '—'}</span></td>
+        <td class="p-4 font-sans text-xs font-bold ${inc.severity === 'Critical' ? 'text-red-600' : inc.severity === 'High' ? 'text-orange-600' : 'text-slate-500'}">${inc.severity || '—'}</td>
+        <td class="p-4 font-sans"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusColor(inc.status)}">${inc.status || 'pending'}</span></td>
+        <td class="p-4 text-slate-500 font-sans">${inc.assigned_unit || '—'}</td>
+        <td class="p-4 text-slate-400 text-xs font-sans max-w-[140px] truncate">${inc.location_details || (inc.lat ? `${parseFloat(inc.lat).toFixed(3)}, ${parseFloat(inc.lng).toFixed(3)}` : '—')}</td>
+      </tr>`).join('');
+  }
+
+  function filterLogs() {
+    const q = document.getElementById('log-search').value.toLowerCase();
+    const status = document.getElementById('log-status-filter').value;
+    let filtered = allLogs;
+    if (q) filtered = filtered.filter(i => [i.user_name, i.user_id, i.category, i.id].some(v => (v||'').toLowerCase().includes(q)));
+    if (status) filtered = filtered.filter(i => i.status === status);
+    renderLogs(filtered);
+  }
+
+  async function loadLogs() {
+    const res = await fetch('/api/admin/incidents');
+    allLogs = await res.json();
+    filterLogs();
+  }
+
+  setInterval(loadLogs, 5000);
+  loadLogs();
+</script>
+{% endblock %}

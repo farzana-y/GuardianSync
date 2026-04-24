@@ -1,0 +1,90 @@
+{% extends "admin/layout.html" %}
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+  <div class="flex justify-between items-center flex-wrap gap-4">
+    <div>
+      <h1 class="text-3xl font-bold text-slate-800">Citizen Messages</h1>
+      <p class="text-slate-500">Direct messages from citizens. Reply to communicate back.</p>
+    </div>
+    <span id="unread-badge" class="hidden px-4 py-1.5 bg-red-600 text-white text-sm font-bold rounded-full"></span>
+  </div>
+  <div id="messages-list" class="space-y-4"></div>
+</div>
+
+<style>
+  .msg-card { transition: all 0.15s; }
+  .msg-card.unread { border-left: 4px solid #ef4444; }
+  .msg-card.replied { border-left: 4px solid #10b981; }
+</style>
+
+<script>
+  async function load() {
+    const res = await fetch('/api/admin/messages');
+    const msgs = await res.json();
+    const container = document.getElementById('messages-list');
+    const unread = msgs.filter(m => m.status === 'unread').length;
+    const badge = document.getElementById('unread-badge');
+    if (unread > 0) {
+      badge.textContent = unread + ' unread';
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+    if (!msgs.length) {
+      container.innerHTML = '<div class="bg-white rounded-2xl p-8 text-center text-slate-400 italic border border-slate-200">No messages from citizens yet.</div>';
+      return;
+    }
+    container.innerHTML = msgs.map(m => `
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm msg-card ${m.status === 'unread' ? 'unread' : m.status === 'replied' ? 'replied' : ''}">
+        <div class="flex justify-between items-start mb-3 flex-wrap gap-2">
+          <div>
+            <p class="font-bold text-slate-800">${m.user_name || 'Unknown'}</p>
+            <p class="text-xs text-slate-400 font-mono">Incident: ${(m.incident_id||'').slice(0,14).toUpperCase()}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs px-2 py-1 rounded-full font-bold ${m.status === 'unread' ? 'bg-red-100 text-red-700' : m.status === 'replied' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}">${m.status}</span>
+            <span class="text-xs text-slate-400">${new Date(m.created_at).toLocaleString('en-IN')}</span>
+          </div>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-3 mb-3">
+          <p class="text-xs text-slate-400 font-bold uppercase tracking-wide mb-1">Citizen Message</p>
+          <p class="text-slate-700 text-sm">${m.message}</p>
+        </div>
+        ${m.reply ? `<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-3">
+          <p class="text-xs text-blue-600 font-bold uppercase tracking-wide mb-1">Your Reply</p>
+          <p class="text-slate-700 text-sm">${m.reply}</p>
+        </div>` : ''}
+        <div class="flex gap-2 flex-wrap">
+          <input type="text" id="reply-${m.id}" placeholder="Type a reply to ${m.user_name || 'citizen'}..." 
+            class="flex-1 text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+            onkeypress="if(event.key==='Enter') sendReply(${m.id})">
+          <button onclick="sendReply(${m.id})" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition flex items-center gap-1">
+            <i class="fa-solid fa-paper-plane"></i> Reply
+          </button>
+          ${m.status !== 'read' ? `<button onclick="markRead(${m.id})" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-300 transition">Mark Read</button>` : ''}
+        </div>
+      </div>`).join('');
+  }
+
+  async function sendReply(id) {
+    const input = document.getElementById('reply-' + id);
+    const reply = input.value.trim();
+    if (!reply) return;
+    await fetch('/api/admin/messages/' + id + '/reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reply })
+    });
+    input.value = '';
+    load();
+  }
+
+  async function markRead(id) {
+    await fetch('/api/admin/messages/' + id + '/read', { method: 'POST' });
+    load();
+  }
+
+  setInterval(load, 8000);
+  load();
+</script>
+{% endblock %}

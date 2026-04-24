@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GuardianSync | Emergency ERP</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root { --sidebar-width: 260px; --primary: #2c3e50; --accent: #e74c3c; }
+        body { display: flex; margin: 0; font-family: 'Segoe UI', sans-serif; background: #f4f7f6; }
+        
+        /* Sidebar */
+        #sidebar { width: var(--sidebar-width); background: var(--primary); color: white; height: 100vh; position: fixed; }
+        .nav-item { padding: 15px 25px; cursor: pointer; display: flex; align-items: center; text-decoration: none; color: rgba(255,255,255,0.7); transition: 0.3s; }
+        .nav-item:hover, .nav-item.active { background: rgba(255,255,255,0.1); color: white; border-left: 4px solid var(--accent); }
+        .nav-item i { margin-right: 15px; width: 20px; }
+
+        /* Main Content */
+        #main-content { margin-left: var(--sidebar-width); flex: 1; padding: 30px; }
+        .header-bar { background: white; padding: 20px; margin: -30px -30px 30px -30px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <div style="padding: 30px; font-size: 1.5rem; font-weight: bold; color: var(--accent);">
+            <i class="fa-solid fa-shield-halved"></i> GuardianSync
+        </div>
+        <nav>
+            <a href="/dashboard" class="nav-item"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+            <a href="/sos" class="nav-item"><i class="fa-solid fa-phone-volume"></i> SOS Terminal</a>
+            <a href="/profile" class="nav-item"><i class="fa-solid fa-user-medical"></i> Medical ID</a>
+            <a href="/history" class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i> My Reports</a>
+            <div style="padding: 20px 25px; font-size: 0.7rem; color: #7f8c8d; text-transform: uppercase;">Dispatcher Tools</div>
+            <a href="/admin/feed" class="nav-item"><i class="fa-solid fa-list-check"></i> Live Queue</a>
+            <a href="/admin/fleet" class="nav-item"><i class="fa-solid fa-truck-medical"></i> Fleet Management</a>
+            <a href="/admin/analytics" class="nav-item"><i class="fa-solid fa-file-waveform"></i> Analytics</a>
+            <a href="/admin/logs" class="nav-item"><i class="fa-solid fa-microchip"></i> System Logs</a>
+        </nav>
+    </div>
+
+    <div id="main-content">
+        <div class="header-bar">
+            <span>Welcome, <strong>Dispatcher Farzana</strong></span>
+            <span id="system-clock"></span>
+        </div>
+        <div id="page-content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</body>
+</html>

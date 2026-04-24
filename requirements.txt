@@ -1,0 +1,30 @@
+# GuardianSync - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Web Framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+
+# Template Engine (included with fastapi, but explicit for clarity)
+jinja2==3.1.4
+
+# Data Validation
+pydantic==2.9.2
+
+# Environment Variables
+python-dotenv==1.0.1
+
+# OpenAI SDK (for LLM + voice services)
+openai==1.51.0
+
+# Voice Pipeline (pipecat for real-time voice streaming)
+pipecat-ai==0.0.49
+
+# Form data parsing (required by FastAPI for multipart/form-data)
+python-multipart==0.0.12
+
+# HTTP client (used internally by openai and pipecat)
+httpx==0.27.2
+
+# WebSocket support (for /ws/ endpoints)
+websockets==13.1

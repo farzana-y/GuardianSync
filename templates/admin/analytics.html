@@ -1,0 +1,176 @@
+{% extends "admin/layout.html" %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="max-w-7xl mx-auto space-y-8">
+  <div>
+    <h1 class="text-3xl font-bold text-slate-800">City Analytics</h1>
+    <p class="text-slate-500">Real-time incident trends and emergency intelligence for your city.</p>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+      <p class="text-xs text-slate-400 font-bold uppercase mb-1">Total Incidents</p>
+      <p id="total-incidents" class="text-3xl font-bold text-slate-800">-</p>
+    </div>
+    <div class="bg-red-50 p-5 rounded-2xl border border-red-200 shadow-sm">
+      <p class="text-xs text-red-400 font-bold uppercase mb-1">Critical Cases</p>
+      <p id="total-critical" class="text-3xl font-bold text-red-600">-</p>
+    </div>
+    <div class="bg-green-50 p-5 rounded-2xl border border-green-200 shadow-sm">
+      <p class="text-xs text-green-400 font-bold uppercase mb-1">Resolved</p>
+      <p id="total-resolved" class="text-3xl font-bold text-green-600">-</p>
+    </div>
+    <div class="bg-blue-50 p-5 rounded-2xl border border-blue-200 shadow-sm">
+      <p class="text-xs text-blue-400 font-bold uppercase mb-1">Avg Response</p>
+      <p id="avg-response" class="text-3xl font-bold text-blue-600">~4 min</p>
+    </div>
+  </div>
+
+  <!-- Charts Row 1 -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <h3 class="font-bold text-slate-800 mb-4">Incidents by Category</h3>
+      <canvas id="category-chart" height="260"></canvas>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <h3 class="font-bold text-slate-800 mb-4">Incident Severity Distribution</h3>
+      <canvas id="severity-chart" height="260"></canvas>
+    </div>
+  </div>
+
+  <!-- Charts Row 2 -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <h3 class="font-bold text-slate-800 mb-4">Incidents Over Time (Last 7 Days)</h3>
+      <canvas id="time-chart" height="180"></canvas>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <h3 class="font-bold text-slate-800 mb-4">Fleet Utilization</h3>
+      <canvas id="fleet-chart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Charts Row 3 -->
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+    <h3 class="font-bold text-slate-800 mb-4">Incident Rate by Category (Bar)</h3>
+    <canvas id="rate-chart" height="120"></canvas>
+  </div>
+</div>
+
+<script>
+  let charts = {};
+
+  function destroyChart(id) {
+    if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+  }
+
+  const COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#14b8a6'];
+
+  async function loadAnalytics() {
+    const [incRes, fleetRes] = await Promise.all([fetch('/api/admin/incidents'), fetch('/api/admin/fleet')]);
+    const incidents = await incRes.json();
+    const fleet = await fleetRes.json();
+
+    document.getElementById('total-incidents').textContent = incidents.length;
+    document.getElementById('total-critical').textContent = incidents.filter(i => i.severity === 'Critical').length;
+    document.getElementById('total-resolved').textContent = incidents.filter(i => i.status === 'closed' || i.status === 'resolved').length;
+
+    // Category counts
+    const catCount = {};
+    incidents.forEach(i => { const k = i.category || 'General'; catCount[k] = (catCount[k] || 0) + 1; });
+    const catKeys = Object.keys(catCount), catVals = Object.values(catCount);
+
+    destroyChart('category');
+    charts['category'] = new Chart(document.getElementById('category-chart'), {
+      type: 'doughnut',
+      data: { labels: catKeys, datasets: [{ data: catVals, backgroundColor: COLORS, borderWidth: 0 }] },
+      options: { plugins: { legend: { position: 'right' } }, cutout: '65%' }
+    });
+
+    // Severity
+    const sevMap = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+    incidents.forEach(i => { const s = i.severity || 'Medium'; if (s in sevMap) sevMap[s]++; });
+    destroyChart('severity');
+    charts['severity'] = new Chart(document.getElementById('severity-chart'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(sevMap),
+        datasets: [{
+          label: 'Count',
+          data: Object.values(sevMap),
+          backgroundColor: ['#ef4444','#f97316','#eab308','#22c55e'],
+          borderRadius: 8, borderSkipped: false
+        }]
+      },
+      options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+
+    // Time series (last 7 days)
+    const days = [];
+    const dayCount = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+      days.push(key); dayCount[key] = 0;
+    }
+    incidents.forEach(inc => {
+      const d = new Date(inc.created_at);
+      const key = d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+      if (key in dayCount) dayCount[key]++;
+    });
+    destroyChart('time');
+    charts['time'] = new Chart(document.getElementById('time-chart'), {
+      type: 'line',
+      data: {
+        labels: days,
+        datasets: [{
+          label: 'Incidents',
+          data: days.map(d => dayCount[d]),
+          borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)',
+          fill: true, tension: 0.4, pointRadius: 5, pointBackgroundColor: '#3b82f6'
+        }]
+      },
+      options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+
+    // Fleet utilization
+    const fleetStatus = { Standby: 0, 'En Route': 0, Unavailable: 0 };
+    fleet.forEach(u => { const s = u.current_status || 'Standby'; if (s in fleetStatus) fleetStatus[s]++; });
+    destroyChart('fleet');
+    charts['fleet'] = new Chart(document.getElementById('fleet-chart'), {
+      type: 'pie',
+      data: {
+        labels: Object.keys(fleetStatus),
+        datasets: [{ data: Object.values(fleetStatus), backgroundColor: ['#22c55e','#f97316','#ef4444'], borderWidth: 0 }]
+      },
+      options: { plugins: { legend: { position: 'bottom' } } }
+    });
+
+    // Rate by category (horizontal bar)
+    destroyChart('rate');
+    charts['rate'] = new Chart(document.getElementById('rate-chart'), {
+      type: 'bar',
+      data: {
+        labels: catKeys,
+        datasets: [{
+          label: 'Incident Count',
+          data: catVals,
+          backgroundColor: COLORS.slice(0, catKeys.length),
+          borderRadius: 6, borderSkipped: false
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
+      }
+    });
+  }
+
+  loadAnalytics();
+  setInterval(loadAnalytics, 15000);
+</script>
+{% endblock %}

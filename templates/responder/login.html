@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GuardianSync | Responder Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .resp-gradient { background: linear-gradient(135deg, #0c4a6e 0%, #075985 40%, #0e7490 100%); }
+  </style>
+</head>
+<body class="min-h-screen resp-gradient flex items-center justify-center p-4">
+  <div class="w-full max-w-md">
+    <!-- Logo -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-20 h-20 bg-cyan-500 rounded-2xl mb-4 shadow-lg shadow-cyan-500/40">
+        <i class="fa-solid fa-truck-medical text-white text-3xl"></i>
+      </div>
+      <h1 class="text-3xl font-bold text-white">Responder Portal</h1>
+      <p class="text-cyan-200 mt-1">GuardianSync Field Operations</p>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
+      <!-- Tabs -->
+      <div class="flex border-b border-slate-100">
+        <button id="tab-login" onclick="showTab('login')"
+          class="flex-1 py-4 text-sm font-bold text-slate-800 border-b-2 border-cyan-600 transition">
+          Sign In
+        </button>
+        <button id="tab-register" onclick="showTab('register')"
+          class="flex-1 py-4 text-sm font-bold text-slate-400 border-b-2 border-transparent transition hover:text-slate-600">
+          Register Unit
+        </button>
+      </div>
+
+      {% if error %}
+      <div class="mx-6 mt-4 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm flex items-center gap-2">
+        <i class="fa-solid fa-circle-exclamation"></i> {{ error }}
+      </div>
+      {% endif %}
+
+      <!-- Login Form -->
+      <div id="form-login" class="p-6 space-y-4">
+        <form method="POST" action="/responder/login">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Responder Email</label>
+              <input type="email" name="email" required placeholder="your@email.com"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-cyan-500 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+              <input type="password" name="password" required placeholder="Your password"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-cyan-500 text-sm">
+            </div>
+            <button type="submit"
+              class="w-full bg-cyan-600 text-white py-3 rounded-xl font-bold hover:bg-cyan-700 transition mt-2">
+              <i class="fa-solid fa-right-to-bracket mr-2"></i>Sign In to Field Portal
+            </button>
+          </div>
+        </form>
+        <div class="text-center pt-2 border-t border-slate-100">
+          <a href="/auth/login" class="text-xs text-slate-400 hover:text-slate-600">
+            <i class="fa-solid fa-arrow-left mr-1"></i>Back to Citizen / Admin Login
+          </a>
+        </div>
+      </div>
+
+      <!-- Register Form -->
+      <div id="form-register" class="p-6 space-y-4 hidden">
+        <p class="text-xs text-slate-500 bg-cyan-50 border border-cyan-200 rounded-lg p-3">
+          <i class="fa-solid fa-info-circle text-cyan-600 mr-1"></i>
+          Your registration will automatically add your unit to the admin fleet dashboard.
+        </p>
+        <form method="POST" action="/responder/register">
+          <div class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
+                <input type="text" name="name" required placeholder="Your name"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-cyan-500 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Phone</label>
+                <input type="text" name="phone" required placeholder="+91 XXXXXXXXXX"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-cyan-500 text-sm">
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label>
+              <input type="email" name="email" required placeholder="your@email.com"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-cyan-500 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+              <input type="password" name="password" required placeholder="Create a password"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-cyan-500 text-sm">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Unit Type</label>
+                <select name="unit_type"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-cyan-500 text-sm">
+                  <option>Ambulance</option>
+                  <option>Fire Truck</option>
+                  <option>Police</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">City</label>
+                <select name="city"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-cyan-500 text-sm">
+                  <option>Kochi</option>
+                  <option>Trivandrum</option>
+                  <option>Kozhikode</option>
+                  <option>Thrissur</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Station / Base Name</label>
+              <input type="text" name="station_name" required placeholder="e.g. Ernakulam Fire Station"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-cyan-500 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Hospital (Ambulance only)</label>
+              <input type="text" name="hospital_name" placeholder="Associated hospital name"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-cyan-500 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Emergency Contact / Dispatch No.</label>
+              <input type="text" name="contact" placeholder="e.g. 108"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-cyan-500 text-sm">
+            </div>
+            <button type="submit"
+              class="w-full bg-cyan-600 text-white py-3 rounded-xl font-bold hover:bg-cyan-700 transition">
+              <i class="fa-solid fa-user-plus mr-2"></i>Register & Join Fleet
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showTab(tab) {
+      document.getElementById('form-login').classList.toggle('hidden', tab !== 'login');
+      document.getElementById('form-register').classList.toggle('hidden', tab !== 'register');
+      document.getElementById('tab-login').className = 'flex-1 py-4 text-sm font-bold transition border-b-2 ' +
+        (tab === 'login' ? 'text-slate-800 border-cyan-600' : 'text-slate-400 border-transparent hover:text-slate-600');
+      document.getElementById('tab-register').className = 'flex-1 py-4 text-sm font-bold transition border-b-2 ' +
+        (tab === 'register' ? 'text-slate-800 border-cyan-600' : 'text-slate-400 border-transparent hover:text-slate-600');
+    }
+    {% if show_register %}showTab('register');{% endif %}
+  </script>
+</body>
+</html>
